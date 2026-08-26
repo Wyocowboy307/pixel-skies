@@ -19,7 +19,7 @@ signal upgrade_requested(aircraft_id: String)
 const HERO_SCALE := 2
 const HERO_TOP := 40.0
 const GROUND_Y := 236.0
-const PANEL_W := 150.0
+const PANEL_W := 170.0
 const TRAVEL_SECONDS := 0.42
 
 var sim: Simulation
@@ -278,36 +278,64 @@ func _refresh_jobs() -> void:
     for job: Job in board:
         _job_list.add_child(_job_card(job))
 
-## A job card, not a table row: icon, plain language, destination, reward.
+## A job card, not a table row: a face or a crate, the destination big, plain
+## language for the load, the payout in green and a clear FITS / NO SPACE call.
 func _job_card(job: Job) -> Control:
     var plane: AircraftInstance = _plane()
     var verdict: Dictionary = Rules.can_load(plane, _family(), job,
         sim.state.loaded_jobs(plane.id))
     var allowed: bool = bool(verdict["ok"])
-
-    var button := Button.new()
-    button.custom_minimum_size = Vector2(0.0, 26.0)
-    button.clip_contents = true
-    button.pressed.connect(func() -> void: _on_load_job(job, button))
-
-    var row := HBoxContainer.new()
-    row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    row.set_anchors_preset(Control.PRESET_FULL_RECT)
-    row.add_theme_constant_override("separation", 4)
-    button.add_child(row)
-    row.add_child(UiTheme.icon(UiTheme.kind_icon(job.kind)))
-
-    var column := VBoxContainer.new()
-    column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.add_theme_constant_override("separation", 0)
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    row.add_child(column)
     var destination: Dictionary = sim.db.airports.get(job.destination_id, {})
-    column.add_child(UiTheme.label("%s TO %s" % [UiTheme.job_summary(job),
-        String(destination.get("code", "?"))], "ink" if allowed else "ink_soft"))
-    column.add_child(UiTheme.label(UiTheme.money(job.reward) if allowed
-        else String(verdict["reason"]), "accent_green" if allowed else "accent_red"))
-    return button
+
+    var card := VisualCard.new()
+    card.font = _font
+    card.face = _job_face(job)
+    card.title = String(destination.get("code", "?"))
+    card.subtitle = UiTheme.job_summary(job)
+    card.value = UiTheme.money(job.reward)
+    card.value_icon = _texture("ui/icons/money.png")
+    card.badge_ok = allowed
+    card.badge_text = "FITS" if allowed else "NO SPACE"
+    if not allowed:
+        card.reason = _short_reason(String(verdict["reason"]))
+    card.pressed.connect(func() -> void: _on_load_job(job, card))
+    return card
+
+## The rules explain at sentence length; a 40 px card gets the plain kernel.
+## The full sentence still appears in the notice line if the player insists.
+func _short_reason(reason: String) -> String:
+    var text: String = reason.to_lower()
+    if text.contains("needed,"):
+        # "2 seats needed, 1 free" -> "1 FREE"
+        return text.get_slice("needed,", 1).strip_edges().to_upper()
+    if text.begins_with("no seats"):
+        return "NO SEATS"
+    if text.contains("hold full"):
+        return "HOLD FULL"
+    if text.contains("out of range"):
+        return "TOO FAR"
+    if text.contains("runway"):
+        return "SHORT RUNWAY"
+    if text.contains("already"):
+        return "IN FLIGHT"
+    if text.contains("not open"):
+        return "LOCKED"
+    if text.begins_with("load at least"):
+        return "LOAD JOBS FIRST"
+    return reason.to_upper()
+
+## Who or what is asking to fly: a portrait for people, the crate for cargo.
+func _job_face(job: Job) -> Texture2D:
+    if job.kind == "passenger":
+        return _texture("people/portrait_%d.png" % (absi(hash(job.id)) % 5))
+    var kind := "box"
+    if job.presentation.contains("mail"):
+        kind = "mail"
+    elif job.presentation.contains("medical"):
+        kind = "medical"
+    elif job.presentation.contains("livestock"):
+        kind = "livestock"
+    return _texture("cargo/crate_%s.png" % kind)
 
 ## Loading is a physical act: the passenger leaves the list and travels to the
 ## seat it will occupy. Without that the manifest just silently changes.
@@ -320,7 +348,8 @@ func _on_load_job(job: Job, from_control: Control) -> void:
         return
     _notice.text = ""
     var slot_index: int = _next_free_slot(job.seats > 0, before)
-    var origin: Vector2 = from_control.global_position + from_control.size * 0.5
+    # The hop starts where the passenger's face (or the crate) sits on the card.
+    var origin: Vector2 = from_control.global_position + Vector2(19.0, from_control.size.y * 0.5)
     var target: Vector2 = _slot_screen_position(job.seats > 0, slot_index)
     var count: int = job.seats if job.seats > 0 else job.cargo_units
     for i in range(count):
@@ -360,33 +389,35 @@ func _refresh_routes() -> void:
             continue
         _route_list.add_child(_route_card(candidate))
 
+## Route cards get the same visual treatment as jobs: destination big, the
+## flight in plain terms, expected profit, and whether the plane can make it.
 func _route_card(destination_id: String) -> Control:
     var verdict: Dictionary = sim.dispatch_check(aircraft_id, destination_id)
     var preview: Dictionary = sim.dispatch_preview(aircraft_id, destination_id)
     var allowed: bool = bool(verdict["ok"])
     var destination: Dictionary = sim.db.airports.get(destination_id, {})
 
-    var button := Button.new()
-    button.custom_minimum_size = Vector2(0.0, 26.0)
-    button.clip_contents = true
-    button.pressed.connect(func() -> void:
+    var card := VisualCard.new()
+    card.font = _font
+    card.face = _texture("ui/icons/route.png")
+    card.title = String(destination.get("code", ""))
+    card.subtitle = "%s · %s" % [String(destination.get("city", "")).to_upper(),
+        UiTheme.duration(float(preview.get("duration_seconds", 0.0)))]
+    if allowed:
+        var profit: int = int(preview.get("profit", 0))
+        card.value = UiTheme.money(profit)
+        card.value_bad = profit < 0
+        card.value_icon = _texture("ui/icons/money.png")
+    card.badge_ok = allowed
+    card.badge_text = "READY" if allowed else "NO GO"
+    if not allowed:
+        card.reason = _short_reason(String(verdict["reason"]))
+    card.highlighted = destination_id == _selected_destination
+    card.pressed.connect(func() -> void:
         _selected_destination = destination_id
         _mode = ""
         refresh())
-    var column := VBoxContainer.new()
-    column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.set_anchors_preset(Control.PRESET_FULL_RECT)
-    column.add_theme_constant_override("separation", 0)
-    button.add_child(column)
-    column.add_child(UiTheme.label("%s %s" % [String(destination.get("code", "")),
-        String(destination.get("city", ""))], "ink" if allowed else "ink_soft"))
-    if allowed:
-        column.add_child(UiTheme.label("%s · %s" % [
-            UiTheme.duration(float(preview.get("duration_seconds", 0.0))),
-            UiTheme.money(int(preview.get("profit", 0)))], "accent_green"))
-    else:
-        column.add_child(UiTheme.label(String(verdict["reason"]), "accent_red"))
-    return button
+    return card
 
 func _refresh_details() -> void:
     _details_button.text = "DETAILS -" if _details_open else "DETAILS +"
@@ -502,6 +533,8 @@ func _draw_hero(plane: AircraftInstance) -> void:
     draw_texture_rect(sprite, Rect2(_hero_origin, drawn), false)
 
     var loaded: Array[Job] = sim.state.loaded_jobs(plane.id)
+    var used: Dictionary = Rules.load_used(loaded)
+    _draw_empty_slots(plane, int(used["seats"]), int(used["cargo_units"]))
     var seat_index := 0
     var cargo_index := 0
     for job: Job in loaded:
@@ -521,6 +554,24 @@ func _draw_hero(plane: AircraftInstance) -> void:
             var centre: Vector2 = _slot_screen_position(true, i)
             var drawn_seat: Vector2 = empty_seat.get_size() * float(HERO_SCALE)
             draw_texture_rect(empty_seat, Rect2((centre - drawn_seat * 0.5).round(), drawn_seat), false)
+
+## Unfilled seats and hold slots are dashed outlines inside the aircraft, so
+## spare capacity is something you see in the plane, not just a number.
+func _draw_empty_slots(plane: AircraftInstance, seats_used: int, cargo_used: int) -> void:
+    var empty: Texture2D = _texture("ui/seat_empty.png")
+    if empty == null:
+        return
+    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
+    var drawn: Vector2 = empty.get_size() * float(HERO_SCALE)
+    var seat_slots: int = mini(int(limits["seats"]), (_anchors.get("seats", []) as Array).size())
+    for index in range(seats_used, seat_slots):
+        var centre: Vector2 = _slot_screen_position(true, index)
+        draw_texture_rect(empty, Rect2((centre - drawn * 0.5).round(), drawn), false)
+    var cargo_slots: int = mini(int(limits["cargo_units"]),
+        (_anchors.get("cargo", []) as Array).size())
+    for index in range(cargo_used, cargo_slots):
+        var centre: Vector2 = _slot_screen_position(false, index)
+        draw_texture_rect(empty, Rect2((centre - drawn * 0.5).round(), drawn), false)
 
 func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String) -> void:
     var texture: Texture2D = _payload_texture(is_seat, variant, presentation)
@@ -602,3 +653,96 @@ func _draw_in_transit() -> void:
             continue
         var drawn: Vector2 = texture.get_size() * float(HERO_SCALE)
         draw_texture_rect(texture, Rect2((at - drawn * 0.5).round(), drawn), false)
+
+# ---------------------------------------------------------------------------
+# Visual card
+# ---------------------------------------------------------------------------
+
+## One job or route as a chunky pixel card: sprite on the left, the destination
+## big in the middle, money on the right, verdict badge in the corner. Drawn by
+## hand so every element lands on a whole pixel and nothing ever half-clips.
+class VisualCard extends Button:
+    const CARD_HEIGHT := 40.0
+    const PAD := 5.0
+    const ICON_BOX := 28.0
+    const TITLE_SIZE := 14
+    const SMALL_SIZE := 7
+
+    var font: Font = null
+    var face: Texture2D = null
+    var title := ""
+    var subtitle := ""
+    var value := ""
+    var value_bad := false
+    var value_icon: Texture2D = null
+    var reason := ""
+    var badge_text := ""
+    var badge_ok := true
+    var highlighted := false
+
+    func _init() -> void:
+        custom_minimum_size = Vector2(0.0, CARD_HEIGHT)
+        clip_contents = true
+        texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+    func _colour(key: String) -> Color:
+        return PixelPalette.get_colour(key)
+
+    func _draw() -> void:
+        if font == null:
+            return
+        var width: float = size.x
+        var text_x: float = PAD + ICON_BOX + 4.0
+
+        if face != null:
+            var drawn: Vector2 = face.get_size() * 2.0
+            var icon_at := Vector2(PAD + roundf((ICON_BOX - drawn.x) * 0.5),
+                roundf((CARD_HEIGHT - drawn.y) * 0.5))
+            draw_texture_rect(face, Rect2(icon_at, drawn), false)
+
+        # Destination, big and navy. The one word the player scans for.
+        draw_string(font, Vector2(text_x, 17.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1,
+            TITLE_SIZE, _colour("ui_bg"))
+
+        var badge_width: float = font.get_string_size(
+            badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x + 8.0
+        var subtitle_room: float = width - PAD - badge_width - 4.0 - text_x
+        draw_string(font, Vector2(text_x, 27.0), _fit(subtitle, subtitle_room),
+            HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, _colour("ink_soft"))
+        if not reason.is_empty():
+            draw_string(font, Vector2(text_x, 36.0), _fit(reason, subtitle_room),
+                HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE, _colour("accent_red"))
+
+        if not value.is_empty():
+            var value_width: float = font.get_string_size(
+                value, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x
+            var value_x: float = width - PAD - value_width
+            draw_string(font, Vector2(value_x, 14.0), value, HORIZONTAL_ALIGNMENT_LEFT, -1,
+                SMALL_SIZE, _colour("accent_red" if value_bad else "accent_green"))
+            if value_icon != null:
+                draw_texture(value_icon, Vector2(value_x - 12.0, 5.0).round())
+
+        if not badge_text.is_empty():
+            _draw_badge(Vector2(width - PAD - badge_width, CARD_HEIGHT - PAD - 11.0),
+                Vector2(badge_width, 11.0))
+
+        if highlighted:
+            draw_rect(Rect2(Vector2(1.0, 1.0), size - Vector2(2.0, 2.0)),
+                _colour("accent_orange"), false, 1.0)
+
+    func _draw_badge(at: Vector2, badge_size: Vector2) -> void:
+        at = at.round()
+        draw_rect(Rect2(at - Vector2.ONE, badge_size + Vector2(2.0, 2.0)), _colour("outline"))
+        draw_rect(Rect2(at, badge_size), _colour("accent_green" if badge_ok else "accent_red"))
+        draw_string(font, at + Vector2(4.0, 8.0), badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+            SMALL_SIZE, _colour("ink" if badge_ok else "white"))
+
+    ## Truncate to the space available rather than letting text half-clip.
+    func _fit(text: String, room: float) -> String:
+        if font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x <= room:
+            return text
+        var out: String = text
+        while out.length() > 1 and font.get_string_size(
+                out + "..", HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x > room:
+            out = out.substr(0, out.length() - 1)
+        return out + ".."
