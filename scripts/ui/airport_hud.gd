@@ -241,45 +241,52 @@ func _refresh_jobs() -> void:
 func _job_row(job: Job) -> Control:
     var verdict: Dictionary = _load_verdict(job)
     var allowed: bool = bool(verdict["ok"])
-    var parts: Dictionary = _row(UiTheme.ROW_HEIGHT)
-    var button: Button = parts["button"]
-    var row: HBoxContainer = parts["row"]
+    var button := Button.new()
+    # Tall enough for two 7px lines inside the chunky frame; the old 20px rows
+    # clipped their own text.
+    button.custom_minimum_size = Vector2(0.0, 38.0)
+    button.clip_contents = true
     button.tooltip_text = String(verdict["reason"])
     button.pressed.connect(func() -> void: _on_job_pressed(job))
     button.mouse_entered.connect(func() -> void: destination_hovered.emit(job.destination_id))
 
-    row.add_child(UiTheme.icon(UiTheme.kind_icon(job.kind)))
+    var row := HBoxContainer.new()
+    row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.set_anchors_preset(Control.PRESET_FULL_RECT)
+    row.add_theme_constant_override("separation", 4)
+    button.add_child(row)
+
+    # The job is a person or a crate, not an abstract row.
+    var face := TextureRect.new()
+    var art: String = "people/portrait_%d.png" % (absi(hash(job.id)) % 5)
+    if job.kind != "passenger":
+        var kind: String = "box"
+        if job.presentation.contains("mail"):
+            kind = "mail"
+        elif job.presentation.contains("medical"):
+            kind = "medical"
+        elif job.presentation.contains("livestock"):
+            kind = "livestock"
+        art = "cargo/crate_%s.png" % kind
+    face.texture = AssetPaths.load_texture(art)
+    face.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+    face.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    face.custom_minimum_size = Vector2(16.0, 0.0)
+    row.add_child(face)
 
     var middle := VBoxContainer.new()
     middle.add_theme_constant_override("separation", 0)
     middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
     row.add_child(middle)
-
     var destination: Dictionary = sim.db.airports.get(job.destination_id, {})
-    var headline := HBoxContainer.new()
-    headline.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    headline.add_theme_constant_override("separation", 3)
-    middle.add_child(headline)
-    headline.add_child(UiTheme.label(UiTheme.job_summary(job), "text" if allowed else "text_dim"))
-    headline.add_child(UiTheme.label("TO", "text_dim"))
-    headline.add_child(UiTheme.label(String(destination.get("code", "?")),
-        "accent_orange" if allowed else "text_dim"))
-
-    var footer := HBoxContainer.new()
-    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    footer.add_theme_constant_override("separation", 3)
-    middle.add_child(footer)
-    # A refused job explains itself in place rather than failing silently.
+    middle.add_child(UiTheme.label("%s TO %s" % [UiTheme.job_summary(job),
+        String(destination.get("code", "?"))], "navy" if allowed else "ink_soft"))
     if allowed:
-        footer.add_child(UiTheme.icon("money"))
-        footer.add_child(UiTheme.label(UiTheme.money(job.reward), "accent_green"))
-        var spacer := Control.new()
-        spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        footer.add_child(spacer)
-        footer.add_child(UiTheme.label(UiTheme.duration(job.seconds_remaining(sim.now())), "text_dim"))
+        middle.add_child(UiTheme.label(UiTheme.money(job.reward), "btn_green_lo"))
     else:
-        footer.add_child(UiTheme.label(String(verdict["reason"]), "accent_red"))
+        middle.add_child(UiTheme.label(String(verdict["reason"]), "btn_red"))
+    row.add_child(UiTheme.fits_badge(allowed))
     return button
 
 func _load_verdict(job: Job) -> Dictionary:
