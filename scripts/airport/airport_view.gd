@@ -32,6 +32,13 @@ var _prop_phase := 0.0
 var _clock := 0.0
 ## Stand chosen for each inbound flight, so it does not change between frames.
 var _arrival_stands: Dictionary = {}
+## Weather, cached and re-read about once a second; hashing it every frame
+## would be wasted work for a value that changes hourly.
+var _weather_kind: int = WeatherService.Kind.CLEAR
+var _weather_intensity := 0.0
+var _weather_checked := -10.0
+## Settled snow speckles, seeded from the airport id and built on demand.
+var _dusting: Array[Vector2] = []
 
 func _ready() -> void:
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -43,6 +50,7 @@ func setup(airport_data: Dictionary, layout_data: Dictionary) -> void:
     airport_id = String(airport_data.get("id", ""))
     _biome = String(layout.get("biome", "plains"))
     _build_scatter()
+    _dusting.clear()
     queue_redraw()
 
 func bind_sim(simulation: Simulation) -> void:
@@ -52,9 +60,11 @@ func bind_sim(simulation: Simulation) -> void:
 func _process(delta: float) -> void:
     _prop_phase = fposmod(_prop_phase + delta * 26.0, TAU)
     _clock += delta
-    # Anything moving on this field means a continuous repaint.
-    if _has_activity():
-        queue_redraw()
+    _poll_weather()
+    # Anything moving on this field means a continuous repaint. Ambient life —
+    # blinking beacons, the baggage cart, weather — is always moving, so the
+    # diorama repaints continuously while it is on screen.
+    queue_redraw()
     _emit_follow_point()
 
 ## Keeps the camera on whatever is under way, so an aircraft never taxis out of
@@ -240,6 +250,9 @@ func _draw() -> void:
     _draw_service_vehicles()
     _draw_parked_aircraft()
     _draw_movements()
+    _draw_apron_life()
+    _draw_beacons()
+    _draw_weather()
 
 func _all_runways() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
@@ -563,3 +576,278 @@ func _draw_puff(at: Vector2) -> void:
     for i in range(5):
         var offset := Vector2(float(-6 - i * 4), float((i % 2) * 3 - 2))
         draw_rect(Rect2((at + offset).round(), Vector2(3.0 - float(i) * 0.4, 2.0)), colour)
+
+# ---------------------------------------------------------------------------
+# Airport life
+# ---------------------------------------------------------------------------
+
+const WALKER_SPRITES: Array[String] = [
+    "people/traveller_teal.png", "people/traveller_orange.png",
+    "people/traveller_red.png", "people/traveller_green.png",
+]
+
+func _building_position(building_type: String) -> Vector2:
+    for entry: Variant in layout.get("buildings", []):
+        var building: Dictionary = entry
+        if String(building.get("type", "")) == building_type:
+            return _vec(building.get("position", [0, 0]))
+    return Vector2.INF
+
+## People and ground equipment. None of it is mechanical; it is what makes the
+## field read as a workplace rather than a diagram.
+func _draw_apron_life() -> void:
+    _draw_boarding_walkers()
+    _draw_baggage_cart()
+    _draw_fuel_worker()
+
+## While a flight here is loading or unloading, a staggered file of travellers
+## walks the line between the terminal door and the aircraft's stand — toward
+## the plane when boarding, back to the terminal when it has arrived.
+func _draw_boarding_walkers() -> void:
+    var terminal: Vector2 = _building_position("terminal")
+    if terminal == Vector2.INF:
+        return
+    for state: Dictionary in _local_movements():
+        var phase: FlightLeg.Phase = state["phase"]
+        if phase != FlightLeg.Phase.LOADING and phase != FlightLeg.Phase.UNLOADING:
+            continue
+        var door: Vector2 = terminal + Vector2(0.0, 14.0)
+        var span: Vector2 = (state["position"] as Vector2) - door
+        var length: float = span.length()
+        if length < 24.0:
+            continue
+        # The file stops short of the aircraft: nobody walks into a propeller.
+        var stop: float = (length - 20.0) / length
+        for i in range(4):
+            var t: float = fposmod(_clock * 14.0 / length + float(i) * 0.27, 1.0) * stop
+            if phase == FlightLeg.Phase.UNLOADING:
+                t = stop - t
+            var texture: Texture2D = _sprite(WALKER_SPRITES[i % WALKER_SPRITES.size()])
+            if texture == null:
+                continue
+            var at: Vector2 = (door + span * t).round()
+            # A one-pixel bob, alternating per walker, so the file strides.
+            var bob: float = -1.0 if int(_clock * 5.0) % 2 == i % 2 else 0.0
+            draw_texture(texture,
+                at + Vector2(-roundf(texture.get_size().x * 0.5), -texture.get_size().y + bob))
+
+## One baggage cart patrols the near edge of the apron, endlessly.
+func _draw_baggage_cart() -> void:
+    var apron: Dictionary = layout.get("apron", {})
+    if apron.is_empty():
+        return
+    var texture: Texture2D = _sprite(VEHICLES % "baggage_cart")
+    if texture == null:
+        return
+    var centre: Vector2 = _vec(apron.get("centre", [0, 0]))
+    var size: Vector2 = _vec(apron.get("size", [256, 80]))
+    var reach: float = maxf(24.0, size.x * 0.5 - 24.0)
+    # Triangle wave: drive right, drive back, at a proper apron crawl.
+    var period: float = reach * 2.0 / 11.0
+    var t: float = fposmod(_clock, period * 2.0)
+    var x: float = (t / period) * reach * 2.0 - reach if t < period \
+        else reach - ((t - period) / period) * reach * 2.0
+    var at: Vector2 = Vector2(centre.x + x, centre.y + size.y * 0.5 - 10.0).round()
+    draw_texture(texture, at - texture.get_size() * 0.5)
+
+## Somebody is always minding the fuel depot.
+func _draw_fuel_worker() -> void:
+    var fuel: Vector2 = _building_position("fuel")
+    if fuel == Vector2.INF:
+        return
+    var texture: Texture2D = _sprite("people/traveller_grey.png")
+    if texture == null:
+        return
+    var at: Vector2 = (fuel + Vector2(20.0, 14.0)).round()
+    draw_texture(texture, at + Vector2(-roundf(texture.get_size().x * 0.5), -texture.get_size().y))
+
+## Blinking lights: an amber cap on each apron mast, and the anti-collision
+## beacon on every parked aircraft. Small, but they make the field feel awake.
+func _draw_beacons() -> void:
+    var amber: Color = PixelPalette.get_colour("accent_yellow")
+    for entry: Variant in layout.get("props", []):
+        var prop: Dictionary = entry
+        if String(prop.get("sprite", "")) != "apron_light":
+            continue
+        var at: Vector2 = _vec(prop.get("position", [0, 0]))
+        # Each mast blinks on its own phase, seeded from where it stands.
+        var offset: float = float(absi(hash("%s_mast" % at)) % 100) / 100.0
+        if fposmod(_clock + offset, 1.4) < 0.7:
+            draw_rect(Rect2((at + Vector2(-1.0, -19.0)).round(), Vector2(2, 2)), amber)
+    if sim == null:
+        return
+    for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
+        var place: Dictionary = stand_transform(plane.stand_id)
+        if not place.is_empty():
+            _draw_aircraft_beacon(plane.id, place["position"])
+    # An aircraft boarding or unloading sits on its stand mid-flight-record;
+    # its beacon runs then too.
+    for state: Dictionary in _local_movements():
+        var phase: FlightLeg.Phase = state["phase"]
+        if phase == FlightLeg.Phase.LOADING or phase == FlightLeg.Phase.UNLOADING:
+            _draw_aircraft_beacon((state["plane"] as AircraftInstance).id, state["position"])
+
+func _draw_aircraft_beacon(plane_id: String, at: Vector2) -> void:
+    var phase_offset: float = float(absi(hash(plane_id)) % 100) / 100.0
+    if fposmod(_clock + phase_offset, 1.2) < 0.35:
+        # Red flash with a white core, so it pops against any livery.
+        draw_rect(Rect2((at + Vector2(-2.0, -2.0)).round(), Vector2(4, 4)),
+            PixelPalette.get_colour("accent_red"))
+        draw_rect(Rect2((at + Vector2(-1.0, -1.0)).round(), Vector2(2, 2)),
+            PixelPalette.get_colour("white"))
+
+# ---------------------------------------------------------------------------
+# Weather
+# ---------------------------------------------------------------------------
+
+## Weather is re-read about once a second. Presentation only: it never touches
+## the leg, the clock or the money (docs/TESTING.md, "Regression rule").
+func _poll_weather() -> void:
+    if sim == null or airport_id.is_empty():
+        return
+    if _clock - _weather_checked < 1.0:
+        return
+    _weather_checked = _clock
+    var weather: Dictionary = WeatherService.at(airport_id, sim.now(),
+        float(airport.get("lat", 45.0)))
+    _weather_kind = int(weather.get("kind", WeatherService.Kind.CLEAR))
+    _weather_intensity = float(weather.get("intensity", 0.0))
+
+## The bright-chrome palette keys arrive with the UI refresh; fall back to the
+## nearest locked colour so this view works with either palette generation.
+func _wx_colour(preferred: String, fallback: String) -> Color:
+    return PixelPalette.get_colour(preferred if PixelPalette.has(preferred) else fallback)
+
+## The part of the field the camera can currently see, in local coordinates.
+## Weather only needs to exist where the player is looking.
+func _visible_rect() -> Rect2:
+    return get_global_transform_with_canvas().affine_inverse() * get_viewport_rect()
+
+func _runway_rect(runway: Dictionary) -> Rect2:
+    var start: Vector2 = _vec(runway.get("start", [0, 0]))
+    var end: Vector2 = _vec(runway.get("end", [0, 0]))
+    var width: float = float(runway.get("width", 32.0))
+    return Rect2(Vector2(start.x, start.y - width * 0.5), Vector2(end.x - start.x, width))
+
+func _paved_rects() -> Array[Rect2]:
+    var out: Array[Rect2] = []
+    for runway: Dictionary in _all_runways():
+        out.append(_runway_rect(runway))
+    var apron: Dictionary = layout.get("apron", {})
+    if not apron.is_empty():
+        var size: Vector2 = _vec(apron.get("size", [256, 80]))
+        out.append(Rect2(_vec(apron.get("centre", [0, 0])) - size * 0.5, size))
+    return out
+
+## Drawn over the whole scene but under the HUD (which lives on a CanvasLayer).
+func _draw_weather() -> void:
+    if _weather_kind == WeatherService.Kind.RAIN:
+        _draw_wet_ground()
+        _draw_rain()
+    elif _weather_kind == WeatherService.Kind.SNOW:
+        _draw_dusting()
+        _draw_snow()
+
+## A thin dark film over the paved surfaces, so the ground reads wet.
+func _draw_wet_ground() -> void:
+    var tint: Color = _wx_colour("navy", "water_deep")
+    tint.a = 0.15
+    for rect: Rect2 in _paved_rects():
+        draw_rect(rect, tint)
+
+## Diagonal streaks on a phase clock: each drop's lane and fall speed are fixed
+## by its index, so the motion is smooth and nothing is re-rolled per frame.
+func _draw_rain() -> void:
+    var view: Rect2 = _visible_rect()
+    var bright: Color = _wx_colour("btn_blue_hi", "sky_light")
+    var deep: Color = _wx_colour("hud_blue", "glass_light")
+    var count: int = 34 + int(roundf(_weather_intensity * 14.0))
+    for i in range(count):
+        var seed_x: float = float(absi(hash("rain_x_%d" % i)) % 1000) / 1000.0
+        var seed_y: float = float(absi(hash("rain_y_%d" % i)) % 1000) / 1000.0
+        var speed: float = 190.0 + float(i % 5) * 22.0
+        var y: float = fposmod(seed_y * view.size.y + _clock * speed, view.size.y)
+        var x: float = fposmod(seed_x * view.size.x - y * 0.45, view.size.x)
+        var at: Vector2 = (view.position + Vector2(x, y)).round()
+        var colour: Color = bright if i % 2 == 0 else deep
+        # Offset 1x2 blocks: a crisp diagonal streak with no rotation. Every
+        # other drop is a long streak, so the shower has depth.
+        draw_rect(Rect2(at, Vector2(1, 2)), colour)
+        draw_rect(Rect2(at + Vector2(1, -2), Vector2(1, 2)), colour)
+        if i % 2 == 1:
+            draw_rect(Rect2(at + Vector2(2, -4), Vector2(1, 2)), colour)
+
+## Flakes drift down slowly with a gentle sideways sway.
+func _draw_snow() -> void:
+    var view: Rect2 = _visible_rect()
+    var white: Color = PixelPalette.get_colour("white")
+    var pale: Color = _wx_colour("ice_light", "white")
+    var count: int = 20 + int(roundf(_weather_intensity * 12.0))
+    for i in range(count):
+        var seed_x: float = float(absi(hash("snow_x_%d" % i)) % 1000) / 1000.0
+        var seed_y: float = float(absi(hash("snow_y_%d" % i)) % 1000) / 1000.0
+        var fall: float = 26.0 + float(i % 4) * 7.0
+        var sway: float = sin(_clock * (0.9 + float(i % 3) * 0.35) + float(i) * 1.7) * 6.0
+        var y: float = fposmod(seed_y * view.size.y + _clock * fall, view.size.y)
+        var x: float = fposmod(seed_x * view.size.x + sway, view.size.x)
+        var at: Vector2 = (view.position + Vector2(x, y)).round()
+        var side: float = 2.0 if i % 3 == 0 else 1.0
+        draw_rect(Rect2(at, Vector2(side, side)), white if i % 2 == 0 else pale)
+
+## Settled snow: solid speckles seeded from the airport id, so the dusting is
+## identical every visit. Grass collects scattered patches; the paved surfaces
+## keep their markings and only gather snow along the runway edge lines.
+func _build_dusting() -> void:
+    _dusting.clear()
+    var rng := RandomNumberGenerator.new()
+    rng.seed = hash("%s_dusting" % airport_id)
+    var extent: Vector2 = _extent()
+    var paved: Array[Rect2] = _paved_rects()
+    var placed := 0
+    var attempts := 0
+    while placed < 230 and attempts < 900:
+        attempts += 1
+        var at: Vector2 = Vector2(roundf(rng.randf_range(-extent.x, extent.x)),
+            roundf(rng.randf_range(-extent.y, extent.y)))
+        var on_paving := false
+        for rect: Rect2 in paved:
+            if rect.has_point(at):
+                on_paving = true
+                break
+        if on_paving:
+            continue
+        _dusting.append(at)
+        placed += 1
+        # About a third of the speckles get a neighbour, so the snow settles in
+        # small patches rather than a field of lone pixels.
+        if rng.randf() < 0.35:
+            _dusting.append(at + Vector2(float(rng.randi_range(-2, 2)), float(rng.randi_range(1, 2))))
+    for runway: Dictionary in _all_runways():
+        var rect: Rect2 = _runway_rect(runway)
+        for _i in range(40):
+            var x: float = roundf(rng.randf_range(rect.position.x, rect.end.x))
+            var edge_y: float = rect.position.y + 2.0 if rng.randf() < 0.5 else rect.end.y - 3.0
+            _dusting.append(Vector2(x, roundf(edge_y + rng.randf_range(-1.0, 1.0))))
+    # A light dusting on every roof: winter reaches the buildings too.
+    for entry: Variant in layout.get("buildings", []):
+        var building: Dictionary = entry
+        var texture: Texture2D = _sprite(BUILDINGS % String(building.get("sprite", "")))
+        if texture == null:
+            continue
+        var half: Vector2 = texture.get_size() * 0.5
+        var centre: Vector2 = _vec(building.get("position", [0, 0]))
+        for _i in range(8):
+            _dusting.append(Vector2(
+                roundf(centre.x + rng.randf_range(-half.x + 2.0, half.x - 3.0)),
+                roundf(centre.y + rng.randf_range(-half.y + 2.0, half.y - 3.0))))
+
+func _draw_dusting() -> void:
+    if _dusting.is_empty():
+        _build_dusting()
+    var white: Color = PixelPalette.get_colour("white")
+    var pale: Color = _wx_colour("ice_light", "white")
+    var index := 0
+    for at: Vector2 in _dusting:
+        var side: float = 2.0 if index % 3 == 0 else 1.0
+        draw_rect(Rect2(at, Vector2(side, side)), white if index % 2 == 0 else pale)
+        index += 1
