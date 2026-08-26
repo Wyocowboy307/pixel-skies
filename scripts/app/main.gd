@@ -30,6 +30,9 @@ var _world_return_position := Vector2.ZERO
 var _world_return_stop := 2
 
 func _ready() -> void:
+    # One theme built from the generated pixel frames, applied to the whole
+    # tree so no control can fall back to Godot's default vector styling.
+    get_tree().root.theme = PixelTheme.build()
     db.load_all()
     _report_data_problems()
 

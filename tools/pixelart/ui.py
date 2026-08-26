@@ -163,3 +163,67 @@ ICONS: dict[str, callable] = {
     "plane": icon_plane,
     "warning": icon_warning,
 }
+
+
+# ---------------------------------------------------------------------------
+# World map markers
+# ---------------------------------------------------------------------------
+
+def marker_regional() -> Canvas:
+    """A 7x7 diamond. Diamonds stay symmetric at odd pixel sizes, which keeps
+    the marker centred exactly on the airport rather than half a pixel off."""
+    canvas = Canvas(7, 7)
+    for y in range(7):
+        spread = 2 - abs(y - 3) + 1
+        if spread < 0:
+            continue
+        canvas.hline(3 - spread, 3 + spread, y, "accent_yellow")
+    canvas.plot(3, 2, "white")
+    canvas.plot(2, 3, "white")
+    canvas.outline()
+    return canvas
+
+
+def marker_major() -> Canvas:
+    """Larger, with a hole punched through, so a hub reads differently from a
+    regional field without needing a label."""
+    canvas = Canvas(9, 9)
+    for y in range(9):
+        spread = 3 - abs(y - 4) + 1
+        if spread < 0:
+            continue
+        canvas.hline(4 - spread, 4 + spread, y, "accent_orange")
+    canvas.plot(4, 3, "accent_orange_light")
+    canvas.plot(3, 4, "accent_orange_light")
+    canvas.plot(4, 4, "ui_bg")
+    canvas.outline()
+    return canvas
+
+
+def marker_selected() -> Canvas:
+    """A 13x13 open ring drawn around whichever marker is selected."""
+    canvas = Canvas(13, 13)
+    canvas.ring(6, 6, 5, "white")
+    # Break the ring at the diagonals so it reads as a reticle, not a blob.
+    for x, y in ((2, 2), (10, 2), (2, 10), (10, 10), (3, 3), (9, 3), (3, 9), (9, 9)):
+        canvas.plot(x, y, None)
+    return canvas
+
+
+def marker_dot() -> Canvas:
+    """The far-zoom marker: three pixels, per docs/WORLD_MAP_AND_ZOOM.md."""
+    canvas = Canvas(3, 3)
+    canvas.plot(1, 1, "white")
+    canvas.plot(0, 1, "accent_yellow")
+    canvas.plot(2, 1, "accent_yellow")
+    canvas.plot(1, 0, "accent_yellow")
+    canvas.plot(1, 2, "accent_yellow")
+    return canvas
+
+
+MARKERS: dict[str, callable] = {
+    "marker_regional": marker_regional,
+    "marker_major": marker_major,
+    "marker_selected": marker_selected,
+    "marker_dot": marker_dot,
+}

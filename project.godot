@@ -12,16 +12,27 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 DevCapture="*res://scripts/dev/dev_capture.gd"
 
 [display]
-window/size/viewport_width=1280
-window/size/viewport_height=720
+
+; The game renders at a fixed 640x360 and is scaled to the window by whole
+; numbers only, so pixels stay square at 1280x720 (2x) and 1920x1080 (3x).
+; See docs/PIXEL_STYLE_GUIDE.md section 1.
+window/size/viewport_width=640
+window/size/viewport_height=360
 window/size/window_width_override=1280
 window/size/window_height_override=720
-window/stretch/mode="canvas_items"
-
-[rendering]
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
-textures/canvas_textures/default_texture_filter=0
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
+window/stretch/scale_mode="integer"
 
 [gui]
-theme/default_font_multichannel_signed_distance_field=true
+
+theme/custom="res://assets/ui/pixel_theme.tres"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+; 0 = nearest. Nothing in this game may be filtered.
+textures/canvas_textures/default_texture_filter=0
+2d/snap/snap_2d_transforms_to_pixel=true
+2d/snap/snap_2d_vertices_to_pixel=true

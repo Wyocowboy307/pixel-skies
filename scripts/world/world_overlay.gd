@@ -12,19 +12,21 @@ signal airport_activated(airport_id: String)
 signal background_clicked()
 
 const ROUTE_SAMPLES := 32
-const ROUTE_COLOR := Color("#4d7f96")
-const ROUTE_COLOR_ACTIVE := Color("#9fd8ea")
-const MARKER_REGIONAL := Color("#f4e2a1")
-const MARKER_MAJOR := Color("#f3ad63")
-const MARKER_RING := Color("#0c1c28")
-const LABEL_COLOR := Color("#e8f1f4")
-const LABEL_SHADOW := Color("#08131b")
-const HOVER_COLOR := Color("#ffffff")
-const CLICK_RADIUS := 18.0
+const CLICK_RADIUS := 10.0
 const DOUBLE_CLICK_SECONDS := 0.35
-const LABEL_FONT_SIZE := 13
+const LABEL_FONT_SIZE := 7
 ## Labels never intrude under the top bar.
-const SAFE_AREA_TOP := 58.0
+const SAFE_AREA_TOP := 20.0
+
+const MARKER_SPRITES := {
+    "regional": "res://assets/art/world/marker_regional.png",
+    "major": "res://assets/art/world/marker_major.png",
+    "selected": "res://assets/art/world/marker_selected.png",
+    "dot": "res://assets/art/world/marker_dot.png",
+}
+
+var _sprites: Dictionary = {}
+var _font: Font
 
 var db: GameDB
 var camera: WorldCamera
@@ -42,7 +44,22 @@ var _pulse := 0.0
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     set_anchors_preset(Control.PRESET_FULL_RECT)
+    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     z_index = 10
+    _font = load("res://assets/art/ui/font5x7.fnt")
+    for key: String in MARKER_SPRITES:
+        var path: String = String(MARKER_SPRITES[key])
+        if ResourceLoader.exists(path):
+            _sprites[key] = load(path)
+
+func _colour(key: String) -> Color:
+    return PixelPalette.get_colour(key)
+
+## Markers and labels are drawn on whole pixels. A marker at a fractional
+## position would be resampled by the integer-scaled viewport and lose its
+## hard edges.
+func _snap(point: Vector2) -> Vector2:
+    return Vector2(roundf(point.x), roundf(point.y))
 
 func bind(database: GameDB, world_camera: WorldCamera) -> void:
     db = database
@@ -133,68 +150,68 @@ func _unhandled_input(event: InputEvent) -> void:
 # Drawing
 # ---------------------------------------------------------------------------
 
-## Markers are drawn before any label, and every marker reserves space, so a
-## label can never be printed underneath a neighbouring airport's dot.
 func _draw() -> void:
     if db == null or camera == null:
         return
     _draw_routes()
-
     var visible: Array[Dictionary] = _visible_airports()
     _obstacles.clear()
     for entry: Dictionary in visible:
         _draw_marker(entry)
-
     for entry: Dictionary in _label_order(visible):
         _draw_label(entry)
 
 func _visible_airports() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
-    var margin := 80.0
+    var margin := 24.0
     for airport_id: String in db.airports:
-        var pos: Vector2 = airport_screen_position(airport_id)
+        var pos: Vector2 = _snap(airport_screen_position(airport_id))
         if pos.x < -margin or pos.y < -margin or pos.x > size.x + margin or pos.y > size.y + margin:
             continue
         var airport: Dictionary = db.airports[airport_id]
-        var is_major: bool = String(airport["tier"]) == "major"
         out.append({
             "id": airport_id,
             "airport": airport,
             "pos": pos,
-            "major": is_major,
-            "radius": 5.0 if is_major else 4.0,
+            "major": String(airport["tier"]) == "major",
         })
     return out
 
-## Selected and hovered airports get first claim on label space, so the airport
-## the player is actually looking at never loses its name to a neighbour.
+## Selected, hovered and major airports claim label space first, so the airport
+## the player is looking at never loses its name to a neighbour.
 func _label_order(visible: Array[Dictionary]) -> Array[Dictionary]:
     var priority: Array[Dictionary] = []
     var rest: Array[Dictionary] = []
     for entry: Dictionary in visible:
         var id: String = String(entry["id"])
-        if id == selected_airport_id or id == hovered_airport_id:
-            priority.append(entry)
-        elif bool(entry["major"]):
+        if id == selected_airport_id or id == hovered_airport_id or bool(entry["major"]):
             priority.append(entry)
         else:
             rest.append(entry)
     return priority + rest
 
+## Route lines are stepped along whole pixels rather than drawn as a smooth
+## polyline, so they read as a dotted pixel trail instead of an aliased curve.
 func _draw_routes() -> void:
     for pair: Array in routes:
         var a: Dictionary = db.airports[String(pair[0])]
         var b: Dictionary = db.airports[String(pair[1])]
-        var points: PackedVector2Array = _route_points(a, b)
-        if points.size() < 2:
-            continue
         var active: bool = selected_airport_id == String(pair[0]) or selected_airport_id == String(pair[1])
-        var color: Color = ROUTE_COLOR_ACTIVE if active else ROUTE_COLOR
-        var width: float = 2.0 if active else 1.0
-        draw_polyline(points, Color(color, 0.75 if active else 0.45), width)
+        var colour: Color = _colour("ui_border_light") if active else _colour("ui_border")
+        var points: PackedVector2Array = _route_points(a, b)
+        var travelled := 0
+        for i in range(points.size() - 1):
+            var from: Vector2 = points[i]
+            var to: Vector2 = points[i + 1]
+            var steps: int = maxi(1, int(from.distance_to(to)))
+            for step in range(steps):
+                travelled += 1
+                # Dashed: three pixels on, three off.
+                if (travelled / 3) % 2 == 1 and not active:
+                    continue
+                var at: Vector2 = _snap(from.lerp(to, float(step) / float(steps)))
+                draw_rect(Rect2(at, Vector2.ONE), colour)
 
-## Samples the great circle, so a long route bends the way flight actually goes
-## rather than cutting a straight line across the projection.
 func _route_points(a: Dictionary, b: Dictionary) -> PackedVector2Array:
     var points: PackedVector2Array = []
     var lat1: float = float(a["lat"])
@@ -208,36 +225,40 @@ func _route_points(a: Dictionary, b: Dictionary) -> PackedVector2Array:
         points.append(camera.world_to_screen(world))
     return points
 
+func _blit(key: String, centre: Vector2, modulate: Color = Color.WHITE) -> Vector2:
+    var texture: Texture2D = _sprites.get(key, null)
+    if texture == null:
+        return Vector2.ZERO
+    var half: Vector2 = (texture.get_size() * 0.5).floor()
+    draw_texture(texture, _snap(centre - half), modulate)
+    return texture.get_size()
+
 func _draw_marker(entry: Dictionary) -> void:
     var pos: Vector2 = entry["pos"]
-    var radius: float = float(entry["radius"])
     var id: String = String(entry["id"])
-    var color: Color = MARKER_MAJOR if bool(entry["major"]) else MARKER_REGIONAL
     var selected: bool = id == selected_airport_id
     var hovered: bool = id == hovered_airport_id
 
+    # Far out, an airport is the three-pixel marker the zoom doc calls for.
+    var far: bool = camera.current_zoom() <= 0.25 and not (selected or hovered)
+    var key: String = "dot" if far else ("major" if bool(entry["major"]) else "regional")
+    var tint: Color = _colour("white") if hovered else Color.WHITE
+    var used: Vector2 = _blit(key, pos, tint)
+
     if selected:
-        # Pulsing ring reads as "this is the thing you picked" at any zoom.
-        var pulse: float = 0.5 + 0.5 * sin(_pulse * 3.0)
-        draw_arc(pos, radius + 6.0 + pulse * 3.0, 0.0, TAU, 28, Color(HOVER_COLOR, 0.35 + pulse * 0.3), 1.5)
-    if hovered or selected:
-        draw_circle(pos, radius + 3.0, Color(color, 0.25))
+        # Ring pulses between two palette colours rather than fading alpha,
+        # which would produce off-palette pixels.
+        var on: bool = fmod(_pulse, 1.0) < 0.6
+        _blit("selected", pos, _colour("white") if on else _colour("accent_orange"))
+        used = Vector2(13, 13)
 
-    draw_circle(pos, radius + 1.5, MARKER_RING)
-    draw_circle(pos, radius, HOVER_COLOR if hovered else color)
-    if bool(entry["major"]):
-        draw_circle(pos, radius - 2.0, MARKER_RING)
+    var claim: Vector2 = used if used != Vector2.ZERO else Vector2(7, 7)
+    _obstacles.append(Rect2(pos - claim * 0.5 - Vector2.ONE, claim + Vector2(2, 2)))
 
-    var claim: float = radius + 4.0
-    _obstacles.append(Rect2(pos - Vector2(claim, claim), Vector2(claim, claim) * 2.0))
-
-## Label density thins as the world gets small, so a zoomed-out view stays
-## readable instead of turning into overlapping text.
 func _draw_label(entry: Dictionary) -> void:
     var id: String = String(entry["id"])
     var airport: Dictionary = entry["airport"]
     var pos: Vector2 = entry["pos"]
-    var radius: float = float(entry["radius"])
     var emphasised: bool = id == selected_airport_id or id == hovered_airport_id
     var zoom: float = camera.current_zoom()
     if not (emphasised or bool(entry["major"]) or zoom >= 0.5):
@@ -245,29 +266,33 @@ func _draw_label(entry: Dictionary) -> void:
 
     var text: String = String(airport["code"])
     if zoom >= 2.0 or emphasised:
-        text = "%s  %s" % [String(airport["code"]), String(airport["city"])]
+        text = "%s %s" % [String(airport["code"]), String(airport["city"])]
 
-    var font: Font = ThemeDB.fallback_font
-    var extents: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE)
-    var gap: float = radius + 6.0
-
-    # Try each side in turn and take the first placement that is clear; a label
-    # crowded out on the right is usually perfectly readable on the left.
+    var extents: Vector2 = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE)
+    var gap := 7.0
     var candidates: Array[Vector2] = [
-        pos + Vector2(gap, LABEL_FONT_SIZE * 0.38),
-        pos + Vector2(-gap - extents.x, LABEL_FONT_SIZE * 0.38),
-        pos + Vector2(-extents.x * 0.5, -gap - 2.0),
-        pos + Vector2(-extents.x * 0.5, gap + LABEL_FONT_SIZE),
+        pos + Vector2(gap, 3.0),
+        pos + Vector2(-gap - extents.x, 3.0),
+        pos + Vector2(-roundf(extents.x * 0.5), -gap),
+        pos + Vector2(-roundf(extents.x * 0.5), gap + 7.0),
     ]
-    for origin: Vector2 in candidates:
-        var claim := Rect2(origin + Vector2(-3.0, -LABEL_FONT_SIZE), extents + Vector2(6.0, 5.0))
+    for index in range(candidates.size()):
+        var origin: Vector2 = candidates[index]
+        var snapped: Vector2 = _snap(origin)
+        var claim := Rect2(snapped + Vector2(-1.0, -LABEL_FONT_SIZE), extents + Vector2(2.0, 3.0))
         if claim.position.y < SAFE_AREA_TOP:
             continue
-        if _collides(claim):
+        # The airport the player just selected always gets its name, even in a
+        # crowd: on the last candidate it is placed regardless of collision.
+        var forced: bool = emphasised and index == candidates.size() - 1
+        if _collides(claim) and not forced:
             continue
         _obstacles.append(claim)
-        draw_string(font, origin + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, LABEL_SHADOW)
-        draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, LABEL_COLOR)
+        # One-pixel drop shadow keeps the label readable over any terrain.
+        draw_string(_font, snapped + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+            LABEL_FONT_SIZE, _colour("outline"))
+        draw_string(_font, snapped, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+            LABEL_FONT_SIZE, _colour("white") if emphasised else _colour("text"))
         return
 
 func _collides(rect: Rect2) -> bool:

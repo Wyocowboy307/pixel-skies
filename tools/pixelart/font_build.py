@@ -53,12 +53,22 @@ def build_fnt(entries: list[dict], atlas_width: int, atlas_height: int,
         f'page id=0 file="{texture_name}"',
         f'chars count={len(entries)}',
     ]
+    rows: list[str] = []
     for entry in entries:
-        lines.append(
-            f'char id={ord(entry["char"])} x={entry["x"]} y={entry["y"]} '
-            f'width={entry["width"]} height={entry["height"]} xoffset=0 yoffset=0 '
-            f'xadvance={entry["advance"]} page=0 chnl=15'
-        )
+        # Lowercase maps to the same cell as its capital: the house style is
+        # caps, and without these ids any lowercase text renders as .notdef
+        # boxes rather than small caps.
+        codes = [ord(entry["char"])]
+        if entry["char"].isalpha():
+            codes.append(ord(entry["char"].lower()))
+        for code in codes:
+            rows.append(
+                f'char id={code} x={entry["x"]} y={entry["y"]} '
+                f'width={entry["width"]} height={entry["height"]} xoffset=0 yoffset=0 '
+                f'xadvance={entry["advance"]} page=0 chnl=15'
+            )
+    lines[-1] = f'chars count={len(rows)}'
+    lines.extend(rows)
     return "\n".join(lines) + "\n"
 
 

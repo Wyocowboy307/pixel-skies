@@ -80,8 +80,10 @@ def build_ui() -> int:
         factory().save(folder / f"{name}.png", name)
     for name, factory in ui.ICONS.items():
         factory().save(folder / "icons" / f"{name}.png", name)
+    for name, factory in ui.MARKERS.items():
+        factory().save(ART / "world" / f"{name}.png", name)
     font_build.write(folder)
-    return len(ui.FRAMES) + len(ui.ICONS) + 1
+    return len(ui.FRAMES) + len(ui.ICONS) + len(ui.MARKERS) + 1
 
 
 def export_palette() -> None:

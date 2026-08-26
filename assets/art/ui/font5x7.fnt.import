@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://dhx8dq8ib0bs4"
+path="res://.godot/imported/font5x7.fnt-618137998c5e49e022832b93d4b35120.fontdata"
+
+[deps]
+
+source_file="res://assets/art/ui/font5x7.fnt"
+dest_files=["res://.godot/imported/font5x7.fnt-618137998c5e49e022832b93d4b35120.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=1

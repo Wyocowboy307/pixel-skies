@@ -3,11 +3,12 @@ extends RefCounted
 ## Geographic <-> render-space conversion.
 ##
 ## Canonical positions are always latitude/longitude. World space is a fixed
-## 4096x2048 equirectangular canvas; every LOD texture is a power-of-two
-## fraction of it, so each tier draws at an integer scale.
+## 2048x1024 equirectangular canvas, sized so the whole world fits a 640x360
+## screen at a zoom stop. Every LOD texture is a power-of-two fraction or
+## multiple of it, so each tier draws at an integer scale.
 
 const EARTH_RADIUS_NM := 3440.065
-const WORLD_SIZE := Vector2(4096.0, 2048.0)
+const WORLD_SIZE := Vector2(2048.0, 1024.0)
 
 static func lat_lon_to_map(lat: float, lon: float, canvas_size: Vector2) -> Vector2:
     var x := ((lon + 180.0) / 360.0) * canvas_size.x
