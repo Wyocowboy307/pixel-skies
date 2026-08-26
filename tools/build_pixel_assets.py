@@ -23,7 +23,7 @@ from pixelart.aircraft import (SPECS, build_map_rotation_strip,    # noqa: E402
 from pixelart.palette import PALETTE                              # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-ART = ROOT / "assets" / "art"
+ART = ROOT / "assets" / "art" / "placeholder"
 DATA = ROOT / "data"
 
 

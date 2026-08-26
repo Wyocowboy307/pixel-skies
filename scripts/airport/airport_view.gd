@@ -11,10 +11,10 @@ signal aircraft_clicked(aircraft_id: String)
 signal aircraft_activated(aircraft_id: String)
 
 const TILE := 16
-const TILES := "res://assets/art/airports/tiles/%s.png"
-const BUILDINGS := "res://assets/art/airports/buildings/%s.png"
-const VEHICLES := "res://assets/art/airports/vehicles/%s.png"
-const PROPS := "res://assets/art/airports/props/%s.png"
+const TILES := "airports/tiles/%s.png"
+const BUILDINGS := "airports/buildings/%s.png"
+const VEHICLES := "airports/vehicles/%s.png"
+const PROPS := "airports/props/%s.png"
 
 var airport_id := ""
 var layout: Dictionary = {}
@@ -63,14 +63,13 @@ func _has_running_aircraft() -> bool:
 
 func _tile(name: String) -> Texture2D:
     if not _tiles.has(name):
-        var path: String = TILES % name
-        _tiles[name] = load(path) if ResourceLoader.exists(path) else null
+        _tiles[name] = AssetPaths.load_texture(TILES % name)
     return _tiles[name]
 
-func _sprite(path: String) -> Texture2D:
-    if not _sprites.has(path):
-        _sprites[path] = load(path) if ResourceLoader.exists(path) else null
-    return _sprites[path]
+func _sprite(logical: String) -> Texture2D:
+    if not _sprites.has(logical):
+        _sprites[logical] = AssetPaths.load_texture(logical)
+    return _sprites[logical]
 
 func _grass_tile() -> String:
     match _biome:
@@ -250,7 +249,7 @@ func _draw_designations(runway: Dictionary, rect: Rect2) -> void:
     var designations: Array = runway.get("designations", [])
     if designations.size() < 2:
         return
-    var font: Font = load("res://assets/art/ui/font5x7.fnt")
+    var font: Font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     var colour: Color = PixelPalette.get_colour("white")
     var mid_y: float = rect.position.y + rect.size.y * 0.5
     # Painted on the surface, so they read along the direction of travel.
@@ -307,7 +306,7 @@ func _draw_apron() -> void:
 ## stand area repeats the cross every 16 px and turns the apron into a grid of
 ## crosses instead of a parking position.
 func _draw_stands() -> void:
-    var font: Font = load("res://assets/art/ui/font5x7.fnt")
+    var font: Font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     var yellow: Color = PixelPalette.get_colour("accent_yellow")
     for entry: Variant in layout.get("stands", []):
         var stand: Dictionary = entry
@@ -410,7 +409,7 @@ func _draw_service_vehicles() -> void:
 func _draw_parked_aircraft() -> void:
     if sim == null:
         return
-    var font: Font = load("res://assets/art/ui/font5x7.fnt")
+    var font: Font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
         var place: Dictionary = stand_transform(plane.stand_id)
         if place.is_empty():

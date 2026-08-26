@@ -33,7 +33,7 @@ from pixelart.palette import ALLOWED_RGB, rgb  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "tools" / ".ne_cache"
-ART_OUT = ROOT / "assets" / "art" / "world"
+ART_OUT = ROOT / "assets" / "art" / "placeholder" / "world"
 DATA_OUT = ROOT / "data" / "world"
 
 BASE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson"
@@ -438,7 +438,7 @@ def main() -> None:
         print(f"[{lod.name}] wrote {out_path.relative_to(ROOT)} ({size_kb:,.0f} KB)")
         meta["lods"].append({
             "name": lod.name,
-            "texture": f"res://assets/art/world/world_{lod.name}.png",
+            "texture": f"res://assets/art/placeholder/world/world_{lod.name}.png",
             "width": lod.width,
             "height": lod.height,
             "source_layer": lod.land_src,

@@ -11,16 +11,16 @@ extends RefCounted
 ## always N square frames wide, so re-baking at a different count needs no code
 ## change.
 const DEFAULT_FRAMES := 32
-const GROUND_STRIP := "res://assets/art/aircraft/%s/%s_top_rot.png"
-const MAP_STRIP := "res://assets/art/aircraft/%s/%s_map_rot.png"
-const SIDE_SPRITE := "res://assets/art/aircraft/%s/%s_side.png"
+const GROUND_STRIP := "aircraft/%s/%s_top_rot.png"
+const MAP_STRIP := "aircraft/%s/%s_map_rot.png"
+const SIDE_SPRITE := "aircraft/%s/%s_side.png"
 
 static var _cache: Dictionary = {}
 
-static func _load(path: String) -> Texture2D:
-    if not _cache.has(path):
-        _cache[path] = load(path) if ResourceLoader.exists(path) else null
-    return _cache[path]
+static func _load(logical: String) -> Texture2D:
+    if not _cache.has(logical):
+        _cache[logical] = AssetPaths.load_texture(logical)
+    return _cache[logical]
 
 static func _key(family_id: String) -> String:
     return family_id.replace("ac_", "")

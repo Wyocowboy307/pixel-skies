@@ -54,7 +54,7 @@ func _ready() -> void:
     size = get_viewport_rect().size
     get_viewport().size_changed.connect(func() -> void: size = get_viewport_rect().size)
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    _font = load("res://assets/art/ui/font5x7.fnt")
+    _font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     _build_chrome()
     set_process(true)
 
@@ -73,8 +73,8 @@ func _load_anchors() -> void:
     if plane == null:
         return
     var key: String = plane.family_id.replace("ac_", "")
-    var path: String = "res://assets/art/aircraft/%s/%s_side.json" % [key, key]
-    if not ResourceLoader.exists(path) and not FileAccess.file_exists(path):
+    var path: String = AssetPaths.resolve_file("aircraft/%s/%s_side.json" % [key, key])
+    if not FileAccess.file_exists(path):
         return
     var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
     if typeof(parsed) == TYPE_DICTIONARY:
@@ -89,10 +89,10 @@ func _family() -> Dictionary:
     var plane: AircraftInstance = _plane()
     return {} if plane == null else sim.db.aircraft.get(plane.family_id, {})
 
-func _texture(path: String) -> Texture2D:
-    if not _sprites.has(path):
-        _sprites[path] = load(path) if ResourceLoader.exists(path) else null
-    return _sprites[path]
+func _texture(logical: String) -> Texture2D:
+    if not _sprites.has(logical):
+        _sprites[logical] = AssetPaths.load_texture(logical)
+    return _sprites[logical]
 
 func _colour(key: String) -> Color:
     return PixelPalette.get_colour(key)
@@ -476,7 +476,12 @@ func _draw_hero(plane: AircraftInstance) -> void:
     if sprite == null:
         return
     var drawn: Vector2 = sprite.get_size() * float(HERO_SCALE)
-    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(GROUND_Y - drawn.y + 6.0))
+    # Seat the aircraft on its own baseline rather than on the bottom of its
+    # canvas. Generated art leaves a variable margin under the wheels, so using
+    # the canvas height leaves the plane hovering above the apron.
+    var baseline: float = float(_anchors.get("baseline", sprite.get_size().y - 1))
+    var wheels_at: float = (baseline + 1.0) * float(HERO_SCALE)
+    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(GROUND_Y + 2.0 - wheels_at))
     draw_texture_rect(sprite, Rect2(_hero_origin, drawn), false)
 
     var loaded: Array[Job] = sim.state.loaded_jobs(plane.id)
@@ -500,7 +505,7 @@ func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String
 
 func _payload_texture(is_seat: bool, variant: int, presentation: String) -> Texture2D:
     if is_seat:
-        return _texture("res://assets/art/people/seated_%d.png" % (variant % 5))
+        return _texture("people/seated_%d.png" % (variant % 5))
     var kind := "box"
     if presentation.contains("mail"):
         kind = "mail"
@@ -508,7 +513,7 @@ func _payload_texture(is_seat: bool, variant: int, presentation: String) -> Text
         kind = "medical"
     elif presentation.contains("livestock"):
         kind = "livestock"
-    return _texture("res://assets/art/cargo/cabin_%s.png" % kind)
+    return _texture("cargo/cabin_%s.png" % kind)
 
 func _draw_route_strip(plane: AircraftInstance) -> void:
     var leg: FlightLeg = sim.flight_for_aircraft(plane.id)

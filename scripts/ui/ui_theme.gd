@@ -42,9 +42,7 @@ static func button(text: String) -> Button:
 
 static func icon(name: String) -> TextureRect:
     var node := TextureRect.new()
-    var path: String = "res://assets/art/ui/icons/%s.png" % name
-    if ResourceLoader.exists(path):
-        node.texture = load(path)
+    node.texture = AssetPaths.load_texture("ui/icons/%s.png" % name)
     node.custom_minimum_size = Vector2(10.0, 10.0)
     node.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
     node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -81,13 +79,12 @@ static func payload_pip(is_seat: bool, filled: bool, variant: int = 0) -> Contro
         empty.color = colour("ui_bg")
         return empty
     var node := TextureRect.new()
-    var path: String = "res://assets/art/people/traveller_teal.png" if is_seat \
-        else "res://assets/art/cargo/crate_box.png"
+    var path: String = "people/traveller_teal.png" if is_seat \
+        else "cargo/crate_box.png"
     if is_seat:
         var shirts: Array[String] = ["teal", "orange", "green", "red", "grey"]
-        path = "res://assets/art/people/traveller_%s.png" % shirts[variant % shirts.size()]
-    if ResourceLoader.exists(path):
-        node.texture = load(path)
+        path = "people/traveller_%s.png" % shirts[variant % shirts.size()]
+    node.texture = AssetPaths.load_texture(path)
     node.custom_minimum_size = Vector2(8.0, 12.0) if is_seat else Vector2(12.0, 12.0)
     node.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
     node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

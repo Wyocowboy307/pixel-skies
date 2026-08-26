@@ -6,13 +6,13 @@ extends RefCounted
 ## management UI belongs to the same world as the airfield beneath it. Nothing
 ## here uses a rounded rect, a gradient or a system font.
 
-const FONT := "res://assets/art/ui/font5x7.fnt"
-const FRAME_DIR := "res://assets/art/ui/%s.png"
+const FONT := "ui/font5x7.fnt"
+const FRAME_DIR := "ui/%s.png"
 const FONT_SIZE := 7
 
 static func build() -> Theme:
     var theme := Theme.new()
-    var font: Font = load(FONT)
+    var font: Font = load(AssetPaths.resolve_file(FONT))
     theme.default_font = font
     theme.default_font_size = FONT_SIZE
 
@@ -58,9 +58,7 @@ static func build() -> Theme:
 ## is how far content is kept clear of the frame.
 static func _frame(name: String, border: int, margin: int) -> StyleBoxTexture:
     var style := StyleBoxTexture.new()
-    var path: String = FRAME_DIR % name
-    if ResourceLoader.exists(path):
-        style.texture = load(path)
+    style.texture = AssetPaths.load_texture(FRAME_DIR % name)
     style.set_texture_margin_all(border)
     style.content_margin_left = float(border + margin)
     style.content_margin_right = float(border + margin)

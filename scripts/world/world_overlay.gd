@@ -21,10 +21,10 @@ const LABEL_FONT_SIZE := 7
 const SAFE_AREA_TOP := 20.0
 
 const MARKER_SPRITES := {
-    "regional": "res://assets/art/world/marker_regional.png",
-    "major": "res://assets/art/world/marker_major.png",
-    "selected": "res://assets/art/world/marker_selected.png",
-    "dot": "res://assets/art/world/marker_dot.png",
+    "regional": "world/marker_regional.png",
+    "major": "world/marker_major.png",
+    "selected": "world/marker_selected.png",
+    "dot": "world/marker_dot.png",
 }
 
 var _sprites: Dictionary = {}
@@ -53,11 +53,11 @@ func _ready() -> void:
     set_anchors_preset(Control.PRESET_FULL_RECT)
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     z_index = 10
-    _font = load("res://assets/art/ui/font5x7.fnt")
+    _font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     for key: String in MARKER_SPRITES:
-        var path: String = String(MARKER_SPRITES[key])
-        if ResourceLoader.exists(path):
-            _sprites[key] = load(path)
+        var texture: Texture2D = AssetPaths.load_texture(String(MARKER_SPRITES[key]))
+        if texture != null:
+            _sprites[key] = texture
 
 func _colour(key: String) -> Color:
     return PixelPalette.get_colour(key)

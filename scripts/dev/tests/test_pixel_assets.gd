@@ -6,6 +6,7 @@ extends TestCase
 ## conformance, and the exact canvas sizes aircraft sprites must use.
 
 const ART_ROOT := "res://assets/art"
+const PLACEHOLDER_ROOT := "res://assets/art/placeholder"
 ## Sampling keeps the suite fast while still catching a stray colour: a bad
 ## asset is almost never bad in only a handful of pixels.
 const MAX_SAMPLES := 4096
@@ -38,7 +39,7 @@ func test_assets_use_only_the_locked_palette() -> void:
     check(allowed.size() > 20, "palette loaded from data/world/palette.json")
     var offenders: PackedStringArray = []
     var checked := 0
-    for path: String in _pngs(ART_ROOT):
+    for path: String in _pngs(PLACEHOLDER_ROOT):
         var texture: Texture2D = load(path)
         if texture == null:
             continue
@@ -70,7 +71,7 @@ func test_sprites_have_hard_edges() -> void:
     # Alpha must be 0 or 255. A partially transparent edge is an anti-aliased
     # edge, which the style guide rejects outright.
     var offenders: PackedStringArray = []
-    for path: String in _pngs(ART_ROOT):
+    for path: String in _pngs(PLACEHOLDER_ROOT):
         if path.contains("/world/world_lod"):
             continue    # map tiers are fully opaque by construction
         var texture: Texture2D = load(path)
@@ -92,29 +93,48 @@ func test_sprites_have_hard_edges() -> void:
                 break
     check(offenders.is_empty(), "soft edges found: %s" % ", ".join(offenders))
 
-func test_aircraft_sprites_match_their_declared_canvas() -> void:
-    # Sizes come from the style guide's canvas ladder, keyed by family.
-    var expected: Dictionary = {
-        "trailhopper_4": {"top": Vector2i(48, 48), "side": Vector2i(144, 96)},
-        "twinwing_8": {"top": Vector2i(64, 64), "side": Vector2i(264, 144)},
-        "highline_19": {"top": Vector2i(96, 96), "side": Vector2i(320, 176)},
-    }
-    for key: String in expected:
-        var sizes: Dictionary = expected[key]
-        for view: String in ["top", "side"]:
-            var path: String = "res://assets/art/aircraft/%s/%s_%s.png" % [key, key, view]
-            var texture: Texture2D = load(path)
-            check(texture != null, "missing sprite %s" % path)
-            if texture != null:
-                check_eq(Vector2i(texture.get_size()), sizes[view],
-                    "%s %s canvas size" % [key, view])
+func test_aircraft_side_sprites_agree_with_their_anchors() -> void:
+    # Canvas sizes are no longer fixed: a side sprite may come from the
+    # placeholder pipeline or from approved PixelLab art, at whatever size that
+    # asset was specified. What must hold either way is that the sprite and its
+    # anchor metadata describe the same image — otherwise the plane screen draws
+    # passengers outside the aircraft.
+    var db := GameDB.new()
+    db.load_all()
+    for family_id: String in db.aircraft:
+        var key: String = family_id.replace("ac_", "")
+        var logical: String = "aircraft/%s/%s_side.png" % [key, key]
+        var texture: Texture2D = AssetPaths.load_texture(logical)
+        check(texture != null, "missing side sprite for %s" % family_id)
+        if texture == null:
+            continue
+        var meta_path: String = AssetPaths.resolve_file(
+            "aircraft/%s/%s_side.json" % [key, key])
+        if not FileAccess.file_exists(meta_path):
+            continue        # families without a load view yet
+        var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta_path))
+        check(typeof(parsed) == TYPE_DICTIONARY, "%s anchors are not valid JSON" % key)
+        if typeof(parsed) != TYPE_DICTIONARY:
+            continue
+        var meta: Dictionary = parsed
+        var canvas: Array = meta.get("canvas", [])
+        check_eq(Vector2i(int(canvas[0]), int(canvas[1])), Vector2i(texture.get_size()),
+            "%s anchors describe a different canvas than the sprite" % key)
+        # Every anchor has to land inside the image.
+        for group: String in ["seats", "cargo"]:
+            for entry: Variant in meta.get(group, []):
+                var slot: int = int(meta.get("seat_slot" if group == "seats" else "cargo_slot", 11))
+                var at := Vector2i(int((entry as Array)[0]), int((entry as Array)[1]))
+                check(at.x >= 0 and at.y >= 0
+                    and at.x + slot <= int(texture.get_size().x)
+                    and at.y + slot <= int(texture.get_size().y),
+                    "%s %s anchor %s falls outside the sprite" % [key, group, at])
 
 func test_rotation_strips_are_complete() -> void:
     # Aircraft are never rotated at runtime, so each family needs a full strip
     # of pre-rendered headings.
     for key: String in ["trailhopper_4", "twinwing_8", "highline_19"]:
-        var path: String = "res://assets/art/aircraft/%s/%s_top_rot.png" % [key, key]
-        var texture: Texture2D = load(path)
+        var texture: Texture2D = AssetPaths.load_texture("aircraft/%s/%s_top_rot.png" % [key, key])
         check(texture != null, "missing rotation strip for %s" % key)
         if texture == null:
             continue
@@ -127,7 +147,7 @@ func test_rotation_strips_are_complete() -> void:
         check(frames >= 16, "%s strip has %d headings, want at least 16" % [key, frames])
 
 func test_surface_tiles_are_sixteen_pixels() -> void:
-    for path: String in _pngs("res://assets/art/airports/tiles"):
+    for path: String in _pngs(PLACEHOLDER_ROOT + "/airports/tiles"):
         var texture: Texture2D = load(path)
         if texture != null:
             check_eq(Vector2i(texture.get_size()), Vector2i(16, 16),
@@ -137,25 +157,25 @@ func test_starter_kit_is_complete() -> void:
     # The locked starter kit. Anything the UI or airport scene reaches for has
     # to exist, or it silently renders nothing at gameplay size.
     var expected: Dictionary = {
-        "res://assets/art/ui/icons/%s.png": [
+        "ui/icons/%s.png": [
             "passenger", "cargo", "contract", "money", "clock", "plane", "warning",
             "fuel", "range", "route", "condition", "seat_slot", "cargo_slot",
             "upgrade", "speed", "runway",
         ],
-        "res://assets/art/airports/buildings/%s.png": [
+        "airports/buildings/%s.png": [
             "terminal_1", "terminal_2", "terminal_3", "hangar_small",
             "cargo_shed", "tower", "fuel_depot",
         ],
-        "res://assets/art/airports/props/%s.png": [
+        "airports/props/%s.png": [
             "windsock", "apron_light", "runway_sign", "fence",
         ],
-        "res://assets/art/airports/vehicles/%s.png": ["tug", "fuel_truck", "baggage_cart"],
-        "res://assets/art/cargo/crate_%s.png": ["box", "mail", "medical", "livestock"],
+        "airports/vehicles/%s.png": ["tug", "fuel_truck", "baggage_cart"],
+        "cargo/crate_%s.png": ["box", "mail", "medical", "livestock"],
     }
     for pattern: String in expected:
         for name: String in expected[pattern]:
-            var path: String = pattern % name
-            check(ResourceLoader.exists(path), "missing starter-kit asset %s" % path)
+            var logical: String = pattern % name
+            check(AssetPaths.exists(logical), "missing starter-kit asset %s" % logical)
 
 func test_every_aircraft_family_has_a_full_sprite_set() -> void:
     var db := GameDB.new()
@@ -163,5 +183,5 @@ func test_every_aircraft_family_has_a_full_sprite_set() -> void:
     for family_id: String in db.aircraft:
         var key: String = family_id.replace("ac_", "")
         for suffix: String in ["top", "side", "top_rot", "map_rot"]:
-            var path: String = "res://assets/art/aircraft/%s/%s_%s.png" % [key, key, suffix]
-            check(ResourceLoader.exists(path), "missing %s sprite for %s" % [suffix, family_id])
+            var logical: String = "aircraft/%s/%s_%s.png" % [key, key, suffix]
+            check(AssetPaths.exists(logical), "missing %s sprite for %s" % [suffix, family_id])

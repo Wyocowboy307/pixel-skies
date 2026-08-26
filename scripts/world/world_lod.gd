@@ -8,10 +8,10 @@ extends RefCounted
 ## is never downsampled, which is what stops pixel art shimmering during zoom.
 
 const TIERS: Array[Dictionary] = [
-    {"name": "lod0", "texture": "res://assets/art/world/world_lod0.png", "world_scale": 4.0},
-    {"name": "lod1", "texture": "res://assets/art/world/world_lod1.png", "world_scale": 2.0},
-    {"name": "lod2", "texture": "res://assets/art/world/world_lod2.png", "world_scale": 1.0},
-    {"name": "lod3", "texture": "res://assets/art/world/world_lod3.png", "world_scale": 0.5},
+    {"name": "lod0", "texture": "world/world_lod0.png", "world_scale": 4.0},
+    {"name": "lod1", "texture": "world/world_lod1.png", "world_scale": 2.0},
+    {"name": "lod2", "texture": "world/world_lod2.png", "world_scale": 1.0},
+    {"name": "lod3", "texture": "world/world_lod3.png", "world_scale": 0.5},
 ]
 
 ## Finest tier that still renders at >= 1 screen pixel per texel.
