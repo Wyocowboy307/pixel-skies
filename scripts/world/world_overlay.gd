@@ -316,7 +316,9 @@ func _draw_routes() -> void:
         var a: Dictionary = db.airports[String(pair[0])]
         var b: Dictionary = db.airports[String(pair[1])]
         var active: bool = selected_airport_id == String(pair[0]) or selected_airport_id == String(pair[1])
-        var colour: Color = _colour("ui_border_light") if active else _colour("ui_border")
+        # The network is white against the saturated ocean — the "that is my
+        # airline" read the whole map exists to deliver.
+        var colour: Color = _colour("white") if active else Color(_colour("white"), 0.75)
         var points: PackedVector2Array = _route_points(a, b)
         var travelled := 0
         for i in range(points.size() - 1):
@@ -467,10 +469,10 @@ func _draw_flights() -> void:
         # frames, so a turning aircraft stays their aircraft.
         var strip: Texture2D = LiverySprites.map_strip(plane, _bank_of(leg.id, heading))
         AircraftSprites.draw_frame(self, strip, at, heading, scale)
+        # Only the selected aircraft gets a label; labelling every bystander
+        # piled tags on top of the airport names near a hub.
         if leg.aircraft_id == selected_aircraft_id:
             _callsign_chip(font, plane, leg, at, now, scale)
-        elif camera.current_zoom() >= 1.0:
-            _registration_tag(font, plane, at, scale)
     _prune_headings(active_ids)
 
 # ---------------------------------------------------------------------------
@@ -559,22 +561,23 @@ func _callsign_chip(font: Font, plane: AircraftInstance, leg: FlightLeg,
     box_origin.x = clampf(box_origin.x, 2.0, size.x - box_size.x - 2.0)
     box_origin.y = maxf(box_origin.y, SAFE_AREA_TOP)
 
-    # Chunky navy card with a light edge and a pointer notch down to the plane.
+    # A luggage tag, not telemetry: warm yellow card, navy text, punched hole.
     draw_rect(Rect2(box_origin - Vector2.ONE, box_size + Vector2(2.0, 2.0)),
         _colour("outline"))
-    draw_rect(Rect2(box_origin, box_size), _colour("ui_bg"))
-    draw_rect(Rect2(box_origin, Vector2(box_size.x, 1.0)), _colour("ui_border_light"))
+    draw_rect(Rect2(box_origin, box_size), _colour("accent_yellow"))
+    draw_rect(Rect2(box_origin, Vector2(box_size.x, 1.0)), _colour("card_hi"))
+    draw_rect(Rect2(box_origin + Vector2(2.0, 2.0), Vector2(2.0, 2.0)), _colour("outline"))
     var notch_x: float = clampf(at.x - 2.0, box_origin.x + 2.0, box_origin.x + box_size.x - 6.0)
     draw_rect(Rect2(_snap(Vector2(notch_x, box_origin.y + box_size.y + 1.0)),
         Vector2(4.0, 2.0)), _colour("outline"))
     draw_rect(Rect2(_snap(Vector2(notch_x + 1.0, box_origin.y + box_size.y + 3.0)),
         Vector2(2.0, 1.0)), _colour("outline"))
 
-    var text_at: Vector2 = _snap(box_origin + Vector2(5.0, 9.0))
+    var text_at: Vector2 = _snap(box_origin + Vector2(7.0, 9.0))
     draw_string(font, text_at, name_line, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        LABEL_FONT_SIZE, _colour("white"))
+        LABEL_FONT_SIZE, _colour("navy_deep"))
     draw_string(font, text_at + Vector2(0.0, 10.0), eta_line, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        LABEL_FONT_SIZE, _colour("accent_orange_light"))
+        LABEL_FONT_SIZE, _colour("btn_blue_lo"))
 
 ## Every other on-screen flight gets its registration, small and shadowed, once
 ## the player is close enough for it to mean something.

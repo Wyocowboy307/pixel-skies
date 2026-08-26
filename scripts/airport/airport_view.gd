@@ -761,7 +761,7 @@ func _draw_rain() -> void:
     var view: Rect2 = _visible_rect()
     var bright: Color = _wx_colour("btn_blue_hi", "sky_light")
     var deep: Color = _wx_colour("hud_blue", "glass_light")
-    var count: int = 34 + int(roundf(_weather_intensity * 14.0))
+    var count: int = 84 + int(roundf(_weather_intensity * 30.0))
     for i in range(count):
         var seed_x: float = float(absi(hash("rain_x_%d" % i)) % 1000) / 1000.0
         var seed_y: float = float(absi(hash("rain_y_%d" % i)) % 1000) / 1000.0
@@ -782,7 +782,7 @@ func _draw_snow() -> void:
     var view: Rect2 = _visible_rect()
     var white: Color = PixelPalette.get_colour("white")
     var pale: Color = _wx_colour("ice_light", "white")
-    var count: int = 20 + int(roundf(_weather_intensity * 12.0))
+    var count: int = 52 + int(roundf(_weather_intensity * 22.0))
     for i in range(count):
         var seed_x: float = float(absi(hash("snow_x_%d" % i)) % 1000) / 1000.0
         var seed_y: float = float(absi(hash("snow_y_%d" % i)) % 1000) / 1000.0

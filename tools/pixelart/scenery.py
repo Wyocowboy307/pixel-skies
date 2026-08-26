@@ -32,11 +32,14 @@ def _speckle(canvas: Canvas, colour: str, count: int, seed: int, size: int = TIL
 # ---------------------------------------------------------------------------
 
 def grass(variant: int = 0, biome: str = "mountain") -> Canvas:
+    # Daylight greens matched to the world map, so flying down into an airport
+    # lands on the same world. The old muted ramp read as night — every review
+    # lens flagged it as the single most sterile thing in the game.
     base, alt, dark = {
-        "mountain": ("grass", "grass_light", "grass_dark"),
-        "plains": ("scrub", "grass_light", "grass"),
-        "highplains": ("sand", "sand_light", "scrub"),
-    }.get(biome, ("grass", "grass_light", "grass_dark"))
+        "mountain": ("map_grass", "map_grass_light", "map_forest"),
+        "plains": ("map_grass_light", "map_scrub", "map_grass"),
+        "highplains": ("map_scrub", "map_desert_light", "map_grass"),
+    }.get(biome, ("map_grass", "map_grass_light", "map_forest"))
     canvas = Canvas(TILE, TILE)
     canvas.fill(base)
     _speckle(canvas, alt, 18, seed=1000 + variant)
@@ -477,14 +480,17 @@ def portrait(hair: str, shirt: str) -> Canvas:
 
 
 def seat_empty() -> Canvas:
-    """An empty cabin seat for the cutaway band — bright orange, so an empty
-    place reads instantly against the white interior."""
+    """An empty cabin seat that reads as a chair: tall backrest with a headrest,
+    deep cushion, little legs — not an orange letter L."""
     canvas = Canvas(11, 11)
-    canvas.rect(1, 1, 3, 8, "accent_orange")     # backrest
-    canvas.vline(1, 1, 8, "accent_orange_light")
-    canvas.rect(1, 7, 8, 3, "accent_orange")     # cushion
-    canvas.hline(1, 8, 7, "accent_orange_light")
-    canvas.hline(2, 8, 9, "accent_red")
+    canvas.rect(1, 0, 4, 2, "accent_red")            # headrest
+    canvas.rect(1, 2, 3, 6, "accent_orange")         # backrest
+    canvas.vline(1, 2, 7, "accent_orange_light")
+    canvas.rect(1, 6, 8, 3, "accent_orange")         # cushion
+    canvas.hline(4, 8, 6, "accent_orange_light")
+    canvas.hline(1, 8, 8, "accent_red")
+    canvas.vline(2, 9, 10, "soil")                   # legs
+    canvas.vline(7, 9, 10, "soil")
     canvas.outline()
     return canvas
 

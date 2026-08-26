@@ -259,6 +259,15 @@ func refresh() -> void:
 
     var flying: bool = plane.state == AircraftInstance.State.IN_FLIGHT
     _fly_button.disabled = flying or loaded.is_empty() or _selected_destination.is_empty()
+    # A disabled FLY says what unlocks it, so the biggest verb in the game is
+    # never a mystery.
+    if _notice.text.is_empty():
+        if flying:
+            _notice.text = ""
+        elif loaded.is_empty():
+            _notice.text = "LOAD SOMETHING FIRST"
+        elif _selected_destination.is_empty():
+            _notice.text = "PICK A ROUTE"
 
     _job_panel.visible = _mode == "load" and not flying
     _route_panel.visible = _mode == "route" and not flying

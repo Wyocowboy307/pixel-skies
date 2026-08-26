@@ -123,8 +123,10 @@ func set_money(amount: int) -> void:
         var fleet: Dictionary = sim.state.fleet_summary()
         _fleet_label.text = "%d/%d" % [int(fleet["flying"]), int(fleet["total"])]
 
-func set_zoom_readout(zoom: float, tier_name: String) -> void:
-    _zoom_label.text = "%s %.2fx" % [tier_name, zoom]
+func set_zoom_readout(_zoom: float, _tier_name: String) -> void:
+    # Engine telemetry never ships in the player HUD — every review lens called
+    # the LOD readout the loudest "technical application" tell in the build.
+    _zoom_label.text = ""
 
 func show_airport(airport_id: String) -> void:
     if db == null or not db.airports.has(airport_id):

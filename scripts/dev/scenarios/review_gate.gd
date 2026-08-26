@@ -124,6 +124,9 @@ func run(cap) -> void:
     await cap.wait(0.5)
 
     # -- 7. BZN daytime ------------------------------------------------------
+    # Pinned clear: the deterministic weather can legitimately roll snow this
+    # hour, and then "day" and "snow" captures are indistinguishable.
+    WeatherService.set_override("apt_bzn", WeatherService.Kind.CLEAR)
     if main._view != main.View.AIRPORT:
         main.enter_airport("apt_bzn")
     await cap.wait(1.4)

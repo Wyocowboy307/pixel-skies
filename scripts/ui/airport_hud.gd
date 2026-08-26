@@ -138,7 +138,7 @@ func _build_dock() -> void:
     _config_button = UiTheme.button("LAYOUT")
     _config_button.tooltip_text = "Trade seats for hold space"
     _config_button.pressed.connect(_on_configuration_pressed)
-    identity.add_child(_config_button)
+
 
     var capacity := HBoxContainer.new()
     capacity.add_theme_constant_override("separation", 6)
@@ -173,6 +173,7 @@ func _build_dock() -> void:
     var buttons := HBoxContainer.new()
     buttons.add_theme_constant_override("separation", 3)
     actions.add_child(buttons)
+    buttons.add_child(_config_button)
     _route_button = UiTheme.button("ROUTE")
     _route_button.pressed.connect(_on_route_pressed)
     buttons.add_child(_route_button)
@@ -201,6 +202,8 @@ func _row(height: float) -> Dictionary:
     var button := Button.new()
     button.custom_minimum_size = Vector2(0.0, height)
     button.clip_contents = true
+    # Rows ride the cream button theme; the old dark strip overrides made the
+    # dock read as a terminal embedded in a card.
     var row := HBoxContainer.new()
     row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     row.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -282,13 +285,22 @@ func _job_row(job: Job) -> Control:
     var destination: Dictionary = sim.db.airports.get(job.destination_id, {})
     middle.add_child(UiTheme.label("%s TO %s" % [UiTheme.job_summary(job),
         String(destination.get("code", "?"))], "navy" if allowed else "ink_soft"))
+    # Second line carries the money and the verdict, so nothing ever sits on
+    # top of the headline. A blocked job goes quiet grey, not shouting red.
+    var footer := HBoxContainer.new()
+    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    footer.add_theme_constant_override("separation", 3)
+    middle.add_child(footer)
     if allowed:
-        middle.add_child(UiTheme.label(UiTheme.money(job.reward), "btn_green_lo"))
+        footer.add_child(UiTheme.label(UiTheme.money(job.reward), "btn_green_lo"))
+        var gap := Control.new()
+        gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        footer.add_child(gap)
+        footer.add_child(UiTheme.fits_badge(true))
     else:
-        middle.add_child(UiTheme.label(String(verdict["reason"]), "btn_red"))
-    row.add_child(UiTheme.fits_badge(allowed))
+        footer.add_child(UiTheme.label(String(verdict["reason"]).to_upper(), "ink_soft"))
     return button
-
 func _load_verdict(job: Job) -> Dictionary:
     var plane: AircraftInstance = sim.state.aircraft.get(selected_aircraft_id, null)
     if plane == null:
@@ -371,7 +383,7 @@ func _fill_slots(row: HBoxContainer, used: int, total: int, colour_key: String) 
         row.add_child(UiTheme.payload_pip(is_seat, i < used, i))
 
 func _manifest_row(job: Job) -> Control:
-    var parts: Dictionary = _row(11.0)
+    var parts: Dictionary = _row(16.0)
     var button: Button = parts["button"]
     var row: HBoxContainer = parts["row"]
     button.tooltip_text = "Click to unload"
@@ -384,7 +396,7 @@ func _manifest_row(job: Job) -> Control:
     var gap := Control.new()
     gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     row.add_child(gap)
-    row.add_child(UiTheme.label(UiTheme.money(job.reward), "accent_green"))
+    row.add_child(UiTheme.label(UiTheme.money(job.reward), "btn_green_lo"))
     return button
 
 # ---------------------------------------------------------------------------
