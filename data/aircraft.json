@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "aircraft_families": [
+    {
+      "id": "ac_trailhopper_4",
+      "name": "Trailhopper 4",
+      "class": "bush",
+      "passenger_capacity": 4,
+      "cargo_units": 3,
+      "mixed_capacity": 4,
+      "range_nm": 520,
+      "cruise_kts": 120,
+      "runway_band_required": 1,
+      "operating_cost_per_nm": 0.42,
+      "purchase_cost": 18000,
+      "turnaround_seconds_game": 45,
+      "art_top": "assets/art/aircraft/trailhopper_4/trailhopper_4_top.png",
+      "art_side": "assets/art/aircraft/trailhopper_4/trailhopper_4_side.png"
+    },
+    {
+      "id": "ac_twinwing_8",
+      "name": "Twinwing 8",
+      "class": "utility_twin",
+      "passenger_capacity": 8,
+      "cargo_units": 6,
+      "mixed_capacity": 8,
+      "range_nm": 900,
+      "cruise_kts": 185,
+      "runway_band_required": 2,
+      "operating_cost_per_nm": 0.72,
+      "purchase_cost": 52000,
+      "turnaround_seconds_game": 60,
+      "art_top": "assets/art/aircraft/twinwing_8/twinwing_8_top.png",
+      "art_side": "assets/art/aircraft/twinwing_8/twinwing_8_side.png"
+    },
+    {
+      "id": "ac_highline_19",
+      "name": "Highline 19",
+      "class": "commuter_turboprop",
+      "passenger_capacity": 19,
+      "cargo_units": 10,
+      "mixed_capacity": 19,
+      "range_nm": 1250,
+      "cruise_kts": 265,
+      "runway_band_required": 3,
+      "operating_cost_per_nm": 1.35,
+      "purchase_cost": 145000,
+      "turnaround_seconds_game": 85,
+      "art_top": "assets/art/aircraft/highline_19/highline_19_top.png",
+      "art_side": "assets/art/aircraft/highline_19/highline_19_side.png"
+    }
+  ]
+}

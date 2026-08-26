@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "upgrades": [
+    {
+      "id": "station_terminal_2",
+      "name": "Expanded Terminal",
+      "category": "passenger",
+      "cost": 12000,
+      "requires": [],
+      "effects": {"passenger_storage": 8, "stands": 1},
+      "visual_change": "terminal_level_2"
+    },
+    {
+      "id": "station_cargo_1",
+      "name": "Cargo Shed",
+      "category": "cargo",
+      "cost": 9000,
+      "requires": [],
+      "effects": {"cargo_storage": 10},
+      "visual_change": "cargo_shed"
+    },
+    {
+      "id": "station_hangar_1",
+      "name": "Maintenance Hangar",
+      "category": "maintenance",
+      "cost": 18000,
+      "requires": ["station_terminal_2"],
+      "effects": {"maintenance_level": 1, "base_slots": 2},
+      "visual_change": "hangar_small"
+    }
+  ]
+}

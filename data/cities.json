@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "airports": [
+    {
+      "id": "apt_bzn",
+      "code": "BZN",
+      "city": "Bozeman",
+      "region": "Montana",
+      "country": "USA",
+      "lat": 45.7775,
+      "lon": -111.1520,
+      "tier": "regional",
+      "runway_band": 3,
+      "passenger_demand": 0.75,
+      "cargo_demand": 0.45,
+      "tourism": 0.8,
+      "starter_unlocked": true,
+      "layout_id": "layout_bzn"
+    },
+    {
+      "id": "apt_bil",
+      "code": "BIL",
+      "city": "Billings",
+      "region": "Montana",
+      "country": "USA",
+      "lat": 45.8077,
+      "lon": -108.5429,
+      "tier": "regional",
+      "runway_band": 3,
+      "passenger_demand": 0.6,
+      "cargo_demand": 0.6,
+      "tourism": 0.35,
+      "starter_unlocked": true,
+      "layout_id": "layout_bil"
+    },
+    {
+      "id": "apt_den",
+      "code": "DEN",
+      "city": "Denver",
+      "region": "Colorado",
+      "country": "USA",
+      "lat": 39.8561,
+      "lon": -104.6737,
+      "tier": "major",
+      "runway_band": 4,
+      "passenger_demand": 1.0,
+      "cargo_demand": 0.9,
+      "tourism": 0.8,
+      "starter_unlocked": true,
+      "layout_id": "layout_den"
+    }
+  ]
+}

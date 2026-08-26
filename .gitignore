@@ -1,0 +1,7 @@
+.godot/
+.import/
+*.tmp
+*.log
+.DS_Store
+.art_candidates/
+art_generation_ledger.local.json
