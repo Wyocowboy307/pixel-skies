@@ -578,8 +578,18 @@ func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String
     if texture == null:
         return
     var centre: Vector2 = _slot_screen_position(is_seat, index)
+    if is_seat:
+        # The seat stays under its passenger: an occupied place reads as a
+        # person sitting in a seat, not a person floating in the cabin.
+        var seat: Texture2D = _texture("ui/seat_empty.png")
+        if seat != null:
+            var seat_drawn: Vector2 = seat.get_size() * float(HERO_SCALE)
+            draw_texture_rect(seat, Rect2((centre - seat_drawn * 0.5).round(), seat_drawn), false)
     var drawn: Vector2 = texture.get_size() * float(HERO_SCALE)
-    draw_texture_rect(texture, Rect2((centre - drawn * 0.5).round(), drawn), false)
+    var at: Vector2 = (centre - drawn * 0.5).round()
+    if is_seat:
+        at += Vector2(1.0, -1.0)      # perched on the cushion, not sunk in it
+    draw_texture_rect(texture, Rect2(at, drawn), false)
 
 func _payload_texture(is_seat: bool, variant: int, presentation: String) -> Texture2D:
     if is_seat:
