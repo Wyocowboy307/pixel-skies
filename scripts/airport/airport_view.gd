@@ -9,6 +9,8 @@ extends Node2D
 
 signal aircraft_clicked(aircraft_id: String)
 signal aircraft_activated(aircraft_id: String)
+## Where the camera should look while an aircraft is operating on this field.
+signal follow_point(at: Vector2, active: bool)
 
 const TILE := 16
 const TILES := "airports/tiles/%s.png"
@@ -27,6 +29,9 @@ var _tiles: Dictionary = {}
 var _sprites: Dictionary = {}
 var _scatter: Array[Dictionary] = []
 var _prop_phase := 0.0
+var _clock := 0.0
+## Stand chosen for each inbound flight, so it does not change between frames.
+var _arrival_stands: Dictionary = {}
 
 func _ready() -> void:
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -45,17 +50,68 @@ func bind_sim(simulation: Simulation) -> void:
     queue_redraw()
 
 func _process(delta: float) -> void:
-    _prop_phase = fposmod(_prop_phase + delta * 14.0, TAU)
-    if _has_running_aircraft():
+    _prop_phase = fposmod(_prop_phase + delta * 26.0, TAU)
+    _clock += delta
+    # Anything moving on this field means a continuous repaint.
+    if _has_activity():
         queue_redraw()
+    _emit_follow_point()
 
-func _has_running_aircraft() -> bool:
+## Keeps the camera on whatever is under way, so an aircraft never taxis out of
+## frame while the player is watching it leave.
+func _emit_follow_point() -> void:
+    var movements: Array[Dictionary] = _local_movements()
+    if movements.is_empty():
+        follow_point.emit(Vector2.ZERO, false)
+        return
+    var state: Dictionary = movements[0]
+    var at: Vector2 = state["position"]
+    if float(state.get("altitude", 0.0)) > 0.01:
+        at -= Vector2(0.0, float(state["altitude"]) * 16.0)
+    follow_point.emit(at, true)
+
+func _has_activity() -> bool:
     if sim == null:
         return false
-    for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
-        if plane.state != AircraftInstance.State.PARKED:
+    for leg: FlightLeg in sim.state.active_flights():
+        if FlightGround.role_for(leg, airport_id) != FlightGround.Role.NONE:
             return true
     return false
+
+## Flights currently using this airfield, with the stand each is tied to.
+func _local_movements() -> Array[Dictionary]:
+    var out: Array[Dictionary] = []
+    if sim == null:
+        return out
+    for leg: FlightLeg in sim.state.active_flights():
+        var role: FlightGround.Role = FlightGround.role_for(leg, airport_id)
+        if role == FlightGround.Role.NONE:
+            continue
+        var plane: AircraftInstance = sim.state.aircraft.get(leg.aircraft_id, null)
+        if plane == null:
+            continue
+        # A departing aircraft keeps the stand it left; an arriving one is
+        # assigned the stand it will park on.
+        var stand: String = plane.stand_id
+        if stand.is_empty():
+            stand = String(_arrival_stand(leg))
+        var state: Dictionary = FlightGround.state(leg, airport_id, layout, stand, sim.now())
+        if bool(state.get("visible", false)):
+            state["plane"] = plane
+            out.append(state)
+    return out
+
+## Which stand an inbound flight will occupy. Chosen once and remembered, so the
+## aircraft does not taxi toward a different stand between frames.
+func _arrival_stand(leg: FlightLeg) -> String:
+    if _arrival_stands.has(leg.id):
+        return _arrival_stands[leg.id]
+    var stand: String = sim.flights.free_stand(sim.state, airport_id)
+    if stand.is_empty():
+        var stands: Array = layout.get("stands", [])
+        stand = String((stands[0] as Dictionary).get("id", "")) if stands else ""
+    _arrival_stands[leg.id] = stand
+    return stand
 
 # ---------------------------------------------------------------------------
 # Resources
@@ -183,6 +239,7 @@ func _draw() -> void:
     _draw_props()
     _draw_service_vehicles()
     _draw_parked_aircraft()
+    _draw_movements()
 
 func _all_runways() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
@@ -439,3 +496,70 @@ func _selection_bracket(at: Vector2, box: float) -> void:
         var origin: Vector2 = (at + corner * box).round()
         draw_rect(Rect2(origin - Vector2(arm * maxf(0.0, corner.x), 0.0), Vector2(arm, 1.0)), colour)
         draw_rect(Rect2(origin - Vector2(0.0, arm * maxf(0.0, corner.y)), Vector2(1.0, arm)), colour)
+
+
+# ---------------------------------------------------------------------------
+# Aircraft under way
+# ---------------------------------------------------------------------------
+
+## Aircraft taxiing, taking off or landing here. Position and heading come from
+## the flight's own timestamps, so what is drawn is always what the simulation
+## says is happening.
+func _draw_movements() -> void:
+    for state: Dictionary in _local_movements():
+        var plane: AircraftInstance = state["plane"]
+        var at: Vector2 = (state["position"] as Vector2).round()
+        var heading: float = state["heading"]
+        var altitude: float = float(state.get("altitude", 0.0))
+
+        if altitude > 0.01:
+            # Shadow stays on the ground and slides out as the aircraft climbs.
+            var shadow_at: Vector2 = at + Vector2(altitude * 26.0, altitude * 14.0)
+            _draw_shadow(plane.family_id, shadow_at, heading)
+            at -= Vector2(0.0, altitude * 16.0)
+
+        if bool(state.get("touchdown_puff", false)):
+            _draw_puff(at)
+
+        AircraftSprites.draw_ground(self, plane.family_id, at, heading)
+        if bool(state.get("engines", false)):
+            _draw_spinning_prop(plane.family_id, at, heading)
+
+## The aircraft silhouette in shadow, for the moment it leaves the ground.
+func _draw_shadow(family_id: String, at: Vector2, heading: float) -> void:
+    var strip: Texture2D = AircraftSprites.ground_strip(family_id)
+    if strip == null:
+        return
+    var frame_size: float = strip.get_size().y
+    var frame: int = AircraftSprites.frame_for(heading, AircraftSprites.frames_in(strip))
+    var region := Rect2(Vector2(float(frame) * frame_size, 0.0), Vector2(frame_size, frame_size))
+    draw_texture_rect_region(strip,
+        Rect2((at - Vector2(frame_size, frame_size) * 0.5).round(), region.size), region,
+        PixelPalette.get_colour("shadow"))
+
+## A turning propeller: a bright arc at the nose, flicked between two positions.
+## Cheaper and crisper than a blur sprite, and it reads at this size.
+func _draw_spinning_prop(family_id: String, at: Vector2, heading: float) -> void:
+    var strip: Texture2D = AircraftSprites.ground_strip(family_id)
+    if strip == null:
+        return
+    var half: float = strip.get_size().y * 0.5
+    var forward := Vector2(cos(heading), sin(heading))
+    var side := Vector2(-forward.y, forward.x)
+    var nose: Vector2 = at + forward * (half * 0.72)
+    var radius: float = half * 0.42
+    var swing: float = sin(_prop_phase) * radius
+    var colour: Color = PixelPalette.get_colour("metal_light")
+    var tip_a: Vector2 = (nose + side * swing).round()
+    var tip_b: Vector2 = (nose - side * swing).round()
+    draw_rect(Rect2(tip_a, Vector2.ONE * 2.0), colour)
+    draw_rect(Rect2(tip_b, Vector2.ONE * 2.0), colour)
+    draw_rect(Rect2((nose - Vector2.ONE).round(), Vector2.ONE * 2.0),
+        PixelPalette.get_colour("white"))
+
+## Tyre smoke on touchdown.
+func _draw_puff(at: Vector2) -> void:
+    var colour: Color = PixelPalette.get_colour("panel_light")
+    for i in range(5):
+        var offset := Vector2(float(-6 - i * 4), float((i % 2) * 3 - 2))
+        draw_rect(Rect2((at + offset).round(), Vector2(3.0 - float(i) * 0.4, 2.0)), colour)

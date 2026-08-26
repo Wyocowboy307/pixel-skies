@@ -185,3 +185,13 @@ func test_every_aircraft_family_has_a_full_sprite_set() -> void:
         for suffix: String in ["top", "side", "top_rot", "map_rot"]:
             var logical: String = "aircraft/%s/%s_%s.png" % [key, key, suffix]
             check(AssetPaths.exists(logical), "missing %s sprite for %s" % [suffix, family_id])
+
+func test_world_map_tiers_resolve() -> void:
+    # The map tiers hold logical paths; if the resolver is bypassed the world
+    # renders as flat grey, which is exactly what happened when the placeholder
+    # and production trees were split.
+    for index in range(WorldLod.TIERS.size()):
+        var logical: String = WorldLod.texture_path(index)
+        check(AssetPaths.exists(logical), "world tier %d missing: %s" % [index, logical])
+        var texture: Texture2D = AssetPaths.load_texture(logical)
+        check(texture != null, "world tier %d did not load" % index)

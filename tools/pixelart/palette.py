@@ -53,6 +53,24 @@ PALETTE: dict[str, str] = {
     "accent_red": "#c05a4a",
     "accent_yellow": "#d9b45a",
     "accent_green": "#7fb37a",
+    # World map. A separate, brighter ramp: the sprite palette is deliberately
+    # muted so aircraft read against terrain, but a whole planet drawn in it
+    # looks grey and lifeless. These are the map's own colours.
+    "map_ocean_deep": "#17527f",
+    "map_ocean": "#2f86c2",
+    "map_shelf": "#5cb4e0",
+    "map_coast": "#0e3a58",
+    "map_forest": "#2e7d4f",
+    "map_grass": "#52a862",
+    "map_grass_light": "#84c96f",
+    "map_scrub": "#a8bd63",
+    "map_desert": "#dcbb78",
+    "map_desert_light": "#f0dda6",
+    "map_mountain": "#8f7f6d",
+    "map_mountain_light": "#c0b1a0",
+    "map_tundra": "#a6bcab",
+    "map_snow": "#eef6fa",
+    "map_river": "#4aa3d6",
     # Daylight. The detail screen stands the aircraft outside in good weather
     # rather than in a dark instrument bay.
     "sky": "#7fb6d1",

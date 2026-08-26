@@ -1,6 +1,6 @@
 [gd_resource type="Theme" load_steps=2 format=3]
 
-[ext_resource type="FontFile" path="res://assets/art/ui/font5x7.fnt" id="1_font"]
+[ext_resource type="FontFile" path="res://assets/art/placeholder/ui/font5x7.fnt" id="1_font"]
 
 [resource]
 default_font = ExtResource("1_font")

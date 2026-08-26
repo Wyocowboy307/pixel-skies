@@ -14,8 +14,10 @@ var sim: Simulation
 var airport_id := ""
 var selected_aircraft_id := ""
 var routing := false
+var _watching := false
 var selected_destination := ""
 
+var _job_panel: PanelContainer
 var _job_list: VBoxContainer
 var _job_header: Label
 var _dock: PanelContainer
@@ -55,6 +57,14 @@ func bind(simulation: Simulation, at_airport: String) -> void:
         selected_aircraft_id = parked[0].id
     refresh()
 
+## Collapses the management panels while an aircraft is operating, so the field
+## is unobstructed during a departure or an arrival.
+func set_watching(watching: bool) -> void:
+    if _watching == watching:
+        return
+    _watching = watching
+    refresh()
+
 func select_aircraft(aircraft_id: String) -> void:
     selected_aircraft_id = aircraft_id
     routing = false
@@ -80,7 +90,8 @@ func _side_panel(on_left: bool) -> PanelContainer:
     return panel
 
 func _build_job_panel() -> void:
-    var panel: PanelContainer = _side_panel(true)
+    _job_panel = _side_panel(true)
+    var panel: PanelContainer = _job_panel
     var column := VBoxContainer.new()
     column.add_theme_constant_override("separation", 2)
     panel.add_child(column)
@@ -205,6 +216,13 @@ func _on_flight_dispatched(leg: FlightLeg) -> void:
 
 func refresh() -> void:
     if sim == null:
+        return
+    if _watching:
+        # Nothing to manage while an aircraft is taxiing or taking off; the
+        # field should be unobstructed.
+        _job_panel.visible = false
+        _route_panel.visible = false
+        _dock.visible = false
         return
     _refresh_jobs()
     _refresh_dock()

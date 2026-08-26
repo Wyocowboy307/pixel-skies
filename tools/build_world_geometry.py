@@ -48,34 +48,34 @@ BASE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/maste
 # palette colours instead, which is also what makes the map read as pixel art
 # rather than as a smooth vector fill.
 # ---------------------------------------------------------------------------
-OCEAN_DEEP = "water_deep"
-OCEAN = "water"
-SHELF = "water_shelf"
-COAST = "outline"
-COAST_LIT = "tundra"
-LAKE = "water_shelf"
-BORDER = "outline"
+OCEAN_DEEP = "map_ocean_deep"
+OCEAN = "map_ocean"
+SHELF = "map_shelf"
+COAST = "map_coast"
+COAST_LIT = "map_shelf"
+LAKE = "map_river"
+BORDER = "map_coast"
 
 # Latitude colour bands, coldest first. Stylized rather than climatological.
 LAT_BANDS = [
-    (72.0, "ice"),
-    (60.0, "tundra"),
-    (50.0, "grass_dark"),
-    (34.0, "grass"),
-    (20.0, "sand"),
-    (10.0, "scrub"),
-    (0.0, "grass_dark"),
+    (72.0, "map_snow"),
+    (60.0, "map_tundra"),
+    (50.0, "map_forest"),
+    (34.0, "map_grass"),
+    (20.0, "map_desert"),
+    (10.0, "map_scrub"),
+    (0.0, "map_forest"),
 ]
 
 # Darker partner used to dither the interior of each band, giving landmasses
 # depth without inventing a colour.
 BAND_SHADE = {
-    "ice": "ice",
-    "tundra": "grass_dark",
-    "grass_dark": "outline",
-    "grass": "grass_dark",
-    "sand": "soil",
-    "scrub": "grass_dark",
+    "map_snow": "map_snow",
+    "map_tundra": "map_mountain",
+    "map_forest": "map_grass",
+    "map_grass": "map_forest",
+    "map_desert": "map_desert_light",
+    "map_scrub": "map_grass",
 }
 
 # How far a band boundary may wander, in degrees of latitude.

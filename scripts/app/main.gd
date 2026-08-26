@@ -32,6 +32,11 @@ var _busy := false
 var _world_return_position := Vector2.ZERO
 var _world_return_stop := 2
 var _followed_aircraft_id := ""
+## The flight the player is currently watching, which drives the automatic
+## handoff between the airfield and the world map.
+var _watched_flight_id := ""
+## Airfield to drop into once the plane screen has closed.
+var _pending_watch_airport := ""
 ## Built once and assigned to every top-level Control we own.
 var _ui_theme: Theme
 
@@ -85,6 +90,31 @@ func _process(_delta: float) -> void:
     # Timestamps do the work; this only notices when a boundary has been passed.
     sim.tick()
     _follow_aircraft()
+    _handoff_watched_flight()
+
+## Moves the camera between the airfield and the world as the watched flight
+## leaves the ground and later comes back to it, so one flight is a continuous
+## thing to watch rather than a set of disconnected screens.
+func _handoff_watched_flight() -> void:
+    if _busy or _watched_flight_id.is_empty() or _view == View.AIRCRAFT:
+        return
+    var leg: FlightLeg = sim.state.flights.get(_watched_flight_id, null)
+    if leg == null or leg.settled:
+        _watched_flight_id = ""
+        return
+    var phase: FlightLeg.Phase = leg.phase_at(sim.now())
+
+    if _view == View.AIRPORT:
+        # Climbed away from the departure field: go up to the world with it.
+        var here: String = _airport_view.airport_id if _airport_view != null else ""
+        if here == leg.origin_id and phase >= FlightLeg.Phase.ENROUTE:
+            _followed_aircraft_id = leg.aircraft_id
+            exit_airport()
+        return
+
+    # On the world map: drop into the destination field as it starts its approach.
+    if phase >= FlightLeg.Phase.APPROACH and phase <= FlightLeg.Phase.UNLOADING:
+        enter_airport(leg.destination_id)
 
 func _follow_aircraft() -> void:
     if _followed_aircraft_id.is_empty() or _view != View.WORLD:
@@ -186,6 +216,7 @@ func enter_airport(airport_id: String) -> void:
     _airport_hud.bind(sim, airport_id)
     _airport_hud.dispatch_completed.connect(_on_dispatch_completed)
     _airport_view.aircraft_clicked.connect(_airport_hud.select_aircraft)
+    _airport_view.follow_point.connect(_on_airport_follow_point)
     _airport_view.aircraft_activated.connect(open_aircraft_detail)
     if not _airport_hud.selected_aircraft_id.is_empty():
         _airport_view.selected_aircraft_id = _airport_hud.selected_aircraft_id
@@ -193,6 +224,7 @@ func enter_airport(airport_id: String) -> void:
     _view = View.AIRPORT
     _hud.set_zoom_readout(AIRPORT_CAMERA_ZOOM, "airport")
     _hud.clear_airport()
+    _airport_view.queue_redraw()
     await _transition.uncover()
     _busy = false
 
@@ -253,6 +285,16 @@ func open_aircraft_detail(aircraft_id: String) -> void:
     _overlay.visible = false
     _view = View.AIRCRAFT
 
+## While something is operating on the field, the camera tracks it and the job
+## board gets out of the way — the player is watching a departure, not shopping.
+func _on_airport_follow_point(at: Vector2, active: bool) -> void:
+    if _view != View.AIRPORT or _airport_camera == null:
+        return
+    if active:
+        _airport_camera.follow(at)
+    if _airport_hud != null:
+        _airport_hud.set_watching(active)
+
 func close_aircraft_detail() -> void:
     if _view != View.AIRCRAFT:
         return
@@ -261,21 +303,35 @@ func close_aircraft_detail() -> void:
         _detail_view = null
     _hud.visible = true
     _view = _detail_return
+    if not _pending_watch_airport.is_empty():
+        var watch: String = _pending_watch_airport
+        _pending_watch_airport = ""
+        _overlay.visible = true
+        if _view == View.AIRPORT and _airport_view != null:
+            _airport_view.queue_redraw()
+        else:
+            _view = View.WORLD
+            enter_airport(watch)
+        return
     if _view == View.AIRPORT and _airport_hud != null:
         _airport_hud.visible = true
         _airport_hud.refresh()
     elif _view == View.WORLD:
         _overlay.visible = true
 
-## Dispatching from the plane screen hands the player straight to the world to
-## watch the departure, which is the point of pressing Fly.
+## Pressing Fly keeps the player at the airfield to watch the departure, then
+## follows the aircraft out to the world once it is airborne. Cutting straight
+## to the map would skip the part worth watching.
 func _on_detail_dispatched(flight_id: String) -> void:
     var leg: FlightLeg = sim.state.flights.get(flight_id, null)
     if leg == null:
         return
     _followed_aircraft_id = leg.aircraft_id
+    _watched_flight_id = flight_id
     _overlay.selected_aircraft_id = leg.aircraft_id
-    _detail_return = View.WORLD
+    # Watch the departure from the field it is leaving. Returning to whatever
+    # view the plane screen was opened from would skip the part worth seeing.
+    _pending_watch_airport = leg.origin_id
 
 func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):

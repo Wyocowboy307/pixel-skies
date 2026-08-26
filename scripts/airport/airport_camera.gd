@@ -28,6 +28,14 @@ func frame(layout_bounds: Rect2, focus: Vector2, initial_zoom: float) -> void:
     global_position = focus
     _clamp_target()
 
+## Ease onto a moving subject without fighting the player: a manual pan cancels
+## the follow until the next time it is turned on.
+func follow(at: Vector2) -> void:
+    if _panning:
+        return
+    _target_position = at
+    _clamp_target()
+
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventMouseButton:
         var button := event as InputEventMouseButton

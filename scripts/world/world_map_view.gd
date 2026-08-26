@@ -40,11 +40,12 @@ func _refresh_tier() -> void:
 func _ensure_texture(tier: int) -> void:
     if _textures.has(tier):
         return
-    var path: String = WorldLod.texture_path(tier)
-    if not ResourceLoader.exists(path):
-        push_error("World map texture missing: %s — run tools/build_world_geometry.py" % path)
+    var logical: String = WorldLod.texture_path(tier)
+    var texture: Texture2D = AssetPaths.load_texture(logical)
+    if texture == null:
+        push_error("World map texture missing: %s — run tools/build_world_geometry.py" % logical)
         return
-    _textures[tier] = load(path)
+    _textures[tier] = texture
 
 func _draw() -> void:
     if _camera == null or not _textures.has(_tier):

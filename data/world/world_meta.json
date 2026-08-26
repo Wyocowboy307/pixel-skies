@@ -10,7 +10,7 @@
   "lods": [
     {
       "name": "lod0",
-      "texture": "res://assets/art/world/world_lod0.png",
+      "texture": "res://assets/art/placeholder/world/world_lod0.png",
       "width": 512,
       "height": 256,
       "source_layer": "ne_110m_land",
@@ -18,7 +18,7 @@
     },
     {
       "name": "lod1",
-      "texture": "res://assets/art/world/world_lod1.png",
+      "texture": "res://assets/art/placeholder/world/world_lod1.png",
       "width": 1024,
       "height": 512,
       "source_layer": "ne_110m_land",
@@ -26,7 +26,7 @@
     },
     {
       "name": "lod2",
-      "texture": "res://assets/art/world/world_lod2.png",
+      "texture": "res://assets/art/placeholder/world/world_lod2.png",
       "width": 2048,
       "height": 1024,
       "source_layer": "ne_110m_land",
@@ -34,7 +34,7 @@
     },
     {
       "name": "lod3",
-      "texture": "res://assets/art/world/world_lod3.png",
+      "texture": "res://assets/art/placeholder/world/world_lod3.png",
       "width": 4096,
       "height": 2048,
       "source_layer": "ne_50m_land",
