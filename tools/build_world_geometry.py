@@ -94,7 +94,8 @@ BAYER4 = np.array([
 
 class Lod:
     def __init__(self, name, width, height, land_src, simplify_px,
-                 min_area_px, shelf_px, lakes, borders, states, dither_scale=1.0):
+                 min_area_px, shelf_px, lakes, borders, states, dither_scale=1.0,
+                 features=False):
         self.name = name
         self.width = width
         self.height = height
@@ -108,6 +109,9 @@ class Lod:
         # Finer tiers are viewed closer, where a heavy stipple stops reading as
         # terrain and starts reading as screen noise.
         self.dither_scale = dither_scale
+        # Close tiers get physical features: mountain glyphs, rivers, forest
+        # and desert texture. Far tiers stay clean.
+        self.features = features
 
 
 # Three tiers, sized so each one displays at an integer scale at a camera zoom
@@ -121,10 +125,10 @@ LODS = [
         lakes="ne_50m_lakes", borders=None, states=None),
     Lod("lod2", 2048, 1024, "ne_110m_land", 0.75, 6.0, 3,
         lakes="ne_50m_lakes", borders="ne_110m_admin_0_boundary_lines_land", states=None,
-        dither_scale=0.7),
+        dither_scale=0.7, features=True),
     Lod("lod3", 4096, 2048, "ne_50m_land", 0.6, 8.0, 4,
         lakes="ne_50m_lakes", borders="ne_50m_admin_0_boundary_lines_land",
-        states="ne_50m_admin_1_states_provinces_lines", dither_scale=0.45),
+        states="ne_50m_admin_1_states_provinces_lines", dither_scale=0.45, features=True),
 ]
 
 
@@ -335,6 +339,97 @@ def latitude_bands(lod: Lod) -> np.ndarray:
     return index
 
 
+# ---------------------------------------------------------------------------
+# Physical features for the close tiers. All placement is deterministic: glyphs
+# sit on a jittered grid gated by real geography, so a rebuild is identical and
+# the Rockies are mountains while Kansas stays plains.
+# ---------------------------------------------------------------------------
+
+MOUNTAIN_GLYPH = [
+    (0, 3, "map_snow"),
+    (1, 2, "map_mountain_light"), (1, 3, "map_snow"), (1, 4, "map_mountain"),
+    (2, 1, "map_mountain_light"), (2, 2, "map_mountain_light"), (2, 3, "map_mountain"),
+    (2, 4, "map_mountain"), (2, 5, "map_mountain"),
+    (3, 0, "map_mountain_light"), (3, 1, "map_mountain_light"), (3, 2, "map_mountain"),
+    (3, 3, "map_mountain"), (3, 4, "map_mountain"), (3, 5, "map_mountain"),
+    (3, 6, "map_mountain"),
+]
+MOUNTAIN_GLYPH_SMALL = [
+    (0, 1, "map_snow"),
+    (1, 0, "map_mountain_light"), (1, 1, "map_mountain"), (1, 2, "map_mountain"),
+]
+
+
+def _stamp(rgb_buffer: np.ndarray, y: int, x: int, glyph) -> None:
+    height, width, _ = rgb_buffer.shape
+    for dy, dx, key in glyph:
+        yy, xx = y + dy, x + dx
+        if 0 <= yy < height and 0 <= xx < width:
+            rgb_buffer[yy, xx] = rgb(key)
+
+
+def _stamp_features(rgb_buffer: np.ndarray, lod: Lod, land: np.ndarray,
+                    band_index: np.ndarray, field: np.ndarray) -> None:
+    rng = np.random.default_rng(90210)
+    height, width = land.shape
+
+    # Rivers first, so mountains draw over their headwaters.
+    rivers = line_mask(fetch("ne_50m_rivers_lake_centerlines")["features"],
+                       lod, lod.simplify_px) & land
+    rgb_buffer[rivers & (field < 0.8)] = rgb("map_river")
+
+    # Mountain ranges from real geography.
+    regions = fetch("ne_50m_geography_regions_polys")["features"]
+    ranges = [f for f in regions
+              if f.get("properties", {}).get("FEATURECLA") == "Range/mtn"]
+    mountain = polygon_mask_features(ranges, lod) & land
+
+    glyph = MOUNTAIN_GLYPH if lod.width >= 4096 else MOUNTAIN_GLYPH_SMALL
+    cell = 9 if lod.width >= 4096 else 6
+    for gy in range(0, height - cell, cell):
+        for gx in range(0, width - cell, cell):
+            patch = mountain[gy:gy + cell, gx:gx + cell]
+            if patch.mean() < 0.4:
+                continue
+            # A quarter of the cells sit out and the rest jitter across most of
+            # the cell, so ranges read as terrain instead of marching in ranks.
+            if rng.random() < 0.25:
+                continue
+            y = gy + int(rng.integers(0, cell - 3))
+            x = gx + int(rng.integers(0, cell - 3))
+            _stamp(rgb_buffer, y, x, glyph)
+
+    # Forest clumps inside the forest band; light grass dots inside forest.
+    forest_band = _band_of("map_forest")
+    grass_band = _band_of("map_grass")
+    if forest_band >= 0:
+        in_forest = land & (band_index == forest_band) & ~mountain
+        rgb_buffer[in_forest & (field < 0.10)] = rgb("map_grass")
+    if grass_band >= 0:
+        in_grass = land & (band_index == grass_band) & ~mountain
+        clump = fractal_noise(height, width, seed=515) > 0.32
+        rgb_buffer[in_grass & clump & (field < 0.5)] = rgb("map_forest")
+
+    # Desert ripples.
+    desert_band = _band_of("map_desert")
+    if desert_band >= 0:
+        in_desert = land & (band_index == desert_band) & ~mountain
+        ripple = (np.add.outer(np.arange(height), np.arange(width) * 2) % 11) == 0
+        rgb_buffer[in_desert & ripple & (field < 0.5)] = rgb("map_desert_light")
+
+
+def _band_of(key: str) -> int:
+    for index, (_bound, band_key) in enumerate(LAT_BANDS):
+        if band_key == key:
+            return index
+    return -1
+
+
+def polygon_mask_features(features, lod: Lod) -> np.ndarray:
+    """polygon_mask for a bare feature list (already filtered)."""
+    return polygon_mask(features, lod)
+
+
 def bayer(height: int, width: int, size: int = 4) -> np.ndarray:
     """Tiled ordered-dither threshold field in 0..1."""
     base = BAYER4 if size == 4 else np.array([[0, 2], [3, 1]], dtype=np.float32) / 4.0
@@ -403,6 +498,9 @@ def render(lod: Lod) -> Image.Image:
     if lod.states:
         states = line_mask(fetch(lod.states)["features"], lod, lod.simplify_px) & land
         rgb_buffer[states & (field < 0.28)] = rgb(BORDER)
+
+    if lod.features:
+        _stamp_features(rgb_buffer, lod, land, band_index, field)
 
     # Coastline last so nothing overdraws it: a hard 1 px outline, with the
     # north-west facing edge catching the light.
