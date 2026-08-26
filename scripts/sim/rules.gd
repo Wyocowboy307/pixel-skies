@@ -15,6 +15,38 @@ static func ok() -> Dictionary:
 static func no(reason: String) -> Dictionary:
     return {"ok": false, "reason": reason}
 
+## The family record with a specific airframe's purchased upgrades applied:
+## range added to range_nm, extra seats and hold units added to every
+## configuration. Callers that hold an owned aircraft should use this (via
+## Simulation.family_of) so capacity and range reflect what was bought.
+static func effective_family(family: Dictionary, upgrade_ids: Array) -> Dictionary:
+    if upgrade_ids.is_empty():
+        return family
+    var out: Dictionary = family.duplicate(true)
+    var extra_seats := 0
+    var extra_cargo := 0
+    var extra_range := 0.0
+    for entry: Variant in family.get("upgrades", []):
+        var upgrade: Dictionary = entry
+        if not upgrade_ids.has(String(upgrade.get("id", ""))):
+            continue
+        var effects: Dictionary = upgrade.get("effects", {})
+        extra_seats += int(effects.get("seats", 0))
+        extra_cargo += int(effects.get("cargo_units", 0))
+        extra_range += float(effects.get("range_nm", 0.0))
+    out["range_nm"] = float(family.get("range_nm", 0.0)) + extra_range
+    var configs: Array = []
+    for entry: Variant in out.get("configurations", []):
+        var config: Dictionary = (entry as Dictionary).duplicate()
+        if int(config.get("seats", 0)) > 0 or extra_cargo == 0:
+            config["seats"] = int(config.get("seats", 0)) + (extra_seats if int(config.get("seats", 0)) > 0 else 0)
+        config["cargo_units"] = int(config.get("cargo_units", 0)) + extra_cargo
+        configs.append(config)
+    out["configurations"] = configs
+    out["passenger_capacity"] = int(family.get("passenger_capacity", 0)) + extra_seats
+    out["cargo_units"] = int(family.get("cargo_units", 0)) + extra_cargo
+    return out
+
 ## Seats and hold units available in an aircraft's current configuration.
 static func capacity(family: Dictionary, configuration: String) -> Dictionary:
     for entry: Variant in family.get("configurations", []):

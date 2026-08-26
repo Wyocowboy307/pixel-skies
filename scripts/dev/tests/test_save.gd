@@ -29,6 +29,12 @@ func test_round_trip_preserves_the_airline() -> void:
     sim.state.reputation = 7
     var plane: AircraftInstance = sim.state.aircraft.values()[0]
     plane.nickname = "Old Faithful"
+    sim.state.money = 999999
+    sim.purchase_aircraft_upgrade(plane.id, "up_cabin")
+    sim.customize_aircraft(plane.id, {"livery_body": "sky"})
+    # Reset after the purchase so the money assertion below checks persistence,
+    # not the upgrade price.
+    sim.state.money = 12345
 
     var restored: Simulation = _reload(sim, T0)
     check_eq(restored.state.money, 12345, "money survives")
@@ -37,6 +43,8 @@ func test_round_trip_preserves_the_airline() -> void:
     var loaded_plane: AircraftInstance = restored.state.aircraft.values()[0]
     check_eq(loaded_plane.nickname, "Old Faithful", "aircraft identity survives")
     check_eq(loaded_plane.registration, plane.registration, "registration survives")
+    check_eq(loaded_plane.upgrade_ids, plane.upgrade_ids, "purchased upgrades survive")
+    check_eq(loaded_plane.livery_body, "sky", "livery survives")
 
 func test_flight_in_progress_survives_a_restart() -> void:
     var sim: Simulation = _sim()

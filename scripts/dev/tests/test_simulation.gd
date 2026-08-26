@@ -280,3 +280,52 @@ func test_upgrade_is_charged_once() -> void:
     check_eq(sim.state.money, before - cost, "charged the listed price")
     sim.purchase_upgrade("apt_bzn", "station_cargo_1")
     check_eq(sim.state.money, before - cost, "buying the same upgrade twice is refused")
+
+# ---------------------------------------------------------------------------
+# Aircraft upgrades
+# ---------------------------------------------------------------------------
+
+func test_aircraft_upgrade_changes_capacity_and_range() -> void:
+    var sim: Simulation = _sim()
+    sim.state.money = 999999
+    var plane: AircraftInstance = _starter(sim)
+    plane.configuration = "passenger"
+    var before: Dictionary = Rules.capacity(sim.family_of(plane), plane.configuration)
+    var base_range: float = float(sim.family_of(plane).get("range_nm", 0.0))
+
+    check(bool(sim.purchase_aircraft_upgrade(plane.id, "up_cabin")["ok"]), "cabin upgrade bought")
+    check(bool(sim.purchase_aircraft_upgrade(plane.id, "up_tanks")["ok"]), "tanks bought")
+
+    var after: Dictionary = Rules.capacity(sim.family_of(plane), plane.configuration)
+    check_eq(int(after["seats"]), int(before["seats"]) + 2, "two more seats")
+    check_near(float(sim.family_of(plane).get("range_nm", 0.0)), base_range + 160.0, 0.01,
+        "range extended by the tanks")
+
+func test_aircraft_upgrade_is_charged_exactly_once() -> void:
+    var sim: Simulation = _sim()
+    sim.state.money = 999999
+    var plane: AircraftInstance = _starter(sim)
+    var before: int = sim.state.money
+    sim.purchase_aircraft_upgrade(plane.id, "up_hold")
+    var cost: int = before - sim.state.money
+    check(cost > 0, "upgrade cost money")
+    var again: Dictionary = sim.purchase_aircraft_upgrade(plane.id, "up_hold")
+    check(not bool(again["ok"]), "buying the same upgrade twice is refused")
+    check_eq(sim.state.money, before - cost, "not charged twice")
+
+func test_aircraft_upgrade_needs_money() -> void:
+    var sim: Simulation = _sim()
+    sim.state.money = 10
+    var plane: AircraftInstance = _starter(sim)
+    check(not bool(sim.purchase_aircraft_upgrade(plane.id, "up_cabin")["ok"]),
+        "an unaffordable upgrade is refused")
+
+func test_customize_records_livery_and_nickname() -> void:
+    var sim: Simulation = _sim()
+    var plane: AircraftInstance = _starter(sim)
+    sim.customize_aircraft(plane.id, {
+        "nickname": "Sky Biscuit", "livery_body": "sky", "livery_accent": "yellow",
+        "livery_tail": "mint"})
+    check_eq(plane.nickname, "Sky Biscuit", "nickname stored")
+    check_eq(plane.livery_body, "sky", "body scheme stored")
+    check_eq(plane.livery_tail, "mint", "tail scheme stored")

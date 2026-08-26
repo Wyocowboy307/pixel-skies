@@ -413,3 +413,49 @@ MARKERS: dict[str, callable] = {
     "marker_selected": marker_selected,
     "marker_dot": marker_dot,
 }
+
+
+# ---------------------------------------------------------------------------
+# Bright game frames. Thicker than the warm set: a 1px outline, a 2px coloured
+# edge and a 1px bevel, which is what makes a button read as a chunky game
+# control rather than an admin widget.
+# ---------------------------------------------------------------------------
+
+def chunky(size: int, fill: str, edge: str, hi: str, lo: str) -> Canvas:
+    canvas = Canvas(size, size)
+    canvas.rect(0, 0, size, size, fill)
+    canvas.rect_outline(0, 0, size, size, "outline")
+    canvas.rect_outline(1, 1, size - 2, size - 2, edge)
+    canvas.rect_outline(2, 2, size - 4, size - 4, edge)
+    canvas.hline(3, size - 4, 3, hi)
+    canvas.vline(3, 3, size - 4, hi)
+    canvas.hline(3, size - 4, size - 4, lo)
+    canvas.vline(size - 4, 3, size - 4, lo)
+    return canvas
+
+
+def _btn(fill: str, hi: str, lo: str) -> Canvas:
+    return chunky(13, fill, "navy", hi, lo)
+
+
+FRAMES.update({
+    "card": lambda: chunky(13, "card", "navy", "card_hi", "card_lo"),
+    "card_raised": lambda: chunky(13, "card_hi", "navy", "white", "card_lo"),
+    "hud_bar": lambda: chunky(13, "hud_blue", "navy", "btn_blue_hi", "hud_blue_deep"),
+    "btn_plain_normal": lambda: _btn("card", "card_hi", "card_lo"),
+    "btn_plain_hover": lambda: _btn("card_hi", "white", "card_lo"),
+    "btn_plain_pressed": lambda: _btn("card_lo", "card_lo", "card_hi"),
+    "btn_plain_disabled": lambda: chunky(13, "card_lo", "card_lo", "card_lo", "card_lo"),
+    "btn_green_normal": lambda: _btn("btn_green", "btn_green_hi", "btn_green_lo"),
+    "btn_green_hover": lambda: _btn("btn_green_hi", "white", "btn_green"),
+    "btn_green_pressed": lambda: _btn("btn_green_lo", "btn_green_lo", "btn_green_hi"),
+    "btn_green_disabled": lambda: chunky(13, "card_lo", "card_lo", "card_lo", "card_lo"),
+    "btn_blue_normal": lambda: _btn("btn_blue", "btn_blue_hi", "btn_blue_lo"),
+    "btn_blue_hover": lambda: _btn("btn_blue_hi", "white", "btn_blue"),
+    "btn_blue_pressed": lambda: _btn("btn_blue_lo", "btn_blue_lo", "btn_blue_hi"),
+    "btn_blue_disabled": lambda: chunky(13, "card_lo", "card_lo", "card_lo", "card_lo"),
+    "btn_orange_normal": lambda: _btn("accent_orange", "accent_orange_light", "accent_red"),
+    "btn_orange_hover": lambda: _btn("accent_orange_light", "white", "accent_orange"),
+    "btn_orange_pressed": lambda: _btn("accent_red", "accent_red", "accent_orange_light"),
+    "btn_orange_disabled": lambda: chunky(13, "card_lo", "card_lo", "card_lo", "card_lo"),
+})

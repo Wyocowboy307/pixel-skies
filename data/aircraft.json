@@ -45,7 +45,36 @@
         "wing_position": 0.3,
         "tail_span": 18,
         "gear": "taildragger"
-      }
+      },
+      "upgrades": [
+        {
+          "id": "up_cabin",
+          "name": "Cabin Plus",
+          "cost": 6500,
+          "effects": {
+            "seats": 2
+          },
+          "blurb": "Two more seats"
+        },
+        {
+          "id": "up_hold",
+          "name": "Big Hold",
+          "cost": 5200,
+          "effects": {
+            "cargo_units": 1
+          },
+          "blurb": "One more cargo slot"
+        },
+        {
+          "id": "up_tanks",
+          "name": "Long Tanks",
+          "cost": 7800,
+          "effects": {
+            "range_nm": 160
+          },
+          "blurb": "+160 nm range"
+        }
+      ]
     },
     {
       "id": "ac_twinwing_8",
@@ -91,7 +120,36 @@
         "wing_position": 0.38,
         "tail_span": 24,
         "gear": "tricycle"
-      }
+      },
+      "upgrades": [
+        {
+          "id": "up_cabin",
+          "name": "Cabin Plus",
+          "cost": 11000,
+          "effects": {
+            "seats": 2
+          },
+          "blurb": "Two more seats"
+        },
+        {
+          "id": "up_hold",
+          "name": "Big Hold",
+          "cost": 9000,
+          "effects": {
+            "cargo_units": 2
+          },
+          "blurb": "Two more cargo slots"
+        },
+        {
+          "id": "up_tanks",
+          "name": "Long Tanks",
+          "cost": 12500,
+          "effects": {
+            "range_nm": 220
+          },
+          "blurb": "+220 nm range"
+        }
+      ]
     },
     {
       "id": "ac_highline_19",
@@ -137,7 +195,36 @@
         "wing_position": 0.34,
         "tail_span": 30,
         "gear": "tricycle"
-      }
+      },
+      "upgrades": [
+        {
+          "id": "up_cabin",
+          "name": "Cabin Plus",
+          "cost": 21000,
+          "effects": {
+            "seats": 3
+          },
+          "blurb": "Three more seats"
+        },
+        {
+          "id": "up_hold",
+          "name": "Big Hold",
+          "cost": 16000,
+          "effects": {
+            "cargo_units": 2
+          },
+          "blurb": "Two more cargo slots"
+        },
+        {
+          "id": "up_tanks",
+          "name": "Long Tanks",
+          "cost": 24000,
+          "effects": {
+            "range_nm": 300
+          },
+          "blurb": "+300 nm range"
+        }
+      ]
     }
   ]
 }

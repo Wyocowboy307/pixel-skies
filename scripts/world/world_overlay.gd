@@ -378,7 +378,7 @@ func _draw_flights() -> void:
 
         if leg.aircraft_id == selected_aircraft_id:
             _draw_track(leg, scale)
-        AircraftSprites.draw_map(self, plane.family_id, at, heading, scale)
+        AircraftSprites.draw_map_for(self, plane, at, heading, scale)
         if leg.aircraft_id == selected_aircraft_id:
             _flight_tag(font, plane, leg, at, now, scale)
 

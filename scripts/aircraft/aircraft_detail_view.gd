@@ -13,6 +13,8 @@ extends Control
 
 signal closed()
 signal dispatched(flight_id: String)
+signal customize_requested(aircraft_id: String)
+signal upgrade_requested(aircraft_id: String)
 
 const HERO_SCALE := 2
 const HERO_TOP := 40.0
@@ -86,8 +88,8 @@ func _plane() -> AircraftInstance:
     return sim.state.aircraft.get(aircraft_id, null)
 
 func _family() -> Dictionary:
-    var plane: AircraftInstance = _plane()
-    return {} if plane == null else sim.db.aircraft.get(plane.family_id, {})
+    # Effective stats: purchased upgrades included.
+    return {} if _plane() == null else sim.family_of(_plane())
 
 func _texture(logical: String) -> Texture2D:
     if not _sprites.has(logical):
@@ -140,15 +142,30 @@ func _build_chrome() -> void:
     actions.add_theme_constant_override("separation", 8)
     add_child(actions)
 
-    var load_button := UiTheme.action("LOAD")
+    var load_button := UiTheme.big_button("LOAD", "green")
     load_button.pressed.connect(func() -> void: _set_mode("load"))
     actions.add_child(load_button)
-    var route_button := UiTheme.action("ROUTE")
+    var route_button := UiTheme.big_button("ROUTE", "blue")
     route_button.pressed.connect(func() -> void: _set_mode("route"))
     actions.add_child(route_button)
-    _fly_button = UiTheme.action("FLY")
+    _fly_button = UiTheme.big_button("FLY", "orange")
     _fly_button.pressed.connect(_on_fly)
     actions.add_child(_fly_button)
+
+    var secondary := HBoxContainer.new()
+    secondary.set_anchors_preset(Control.PRESET_CENTER_TOP)
+    secondary.offset_top = 284.0
+    secondary.offset_left = -120.0
+    secondary.offset_right = 120.0
+    secondary.alignment = BoxContainer.ALIGNMENT_CENTER
+    secondary.add_theme_constant_override("separation", 5)
+    add_child(secondary)
+    var customize := UiTheme.button("CUSTOMIZE")
+    customize.pressed.connect(func() -> void: customize_requested.emit(aircraft_id))
+    secondary.add_child(customize)
+    var upgrade := UiTheme.button("UPGRADE")
+    upgrade.pressed.connect(func() -> void: upgrade_requested.emit(aircraft_id))
+    secondary.add_child(upgrade)
 
     _notice = UiTheme.label("", "accent_red")
     _notice.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -472,7 +489,7 @@ func _draw_clouds() -> void:
 ## The aircraft with its actual manifest inside it, drawn at a whole-number
 ## scale so every pixel stays hard.
 func _draw_hero(plane: AircraftInstance) -> void:
-    var sprite: Texture2D = AircraftSprites.side_sprite(plane.family_id)
+    var sprite: Texture2D = LiverySprites.side_texture(plane)
     if sprite == null:
         return
     var drawn: Vector2 = sprite.get_size() * float(HERO_SCALE)
@@ -494,6 +511,16 @@ func _draw_hero(plane: AircraftInstance) -> void:
         for i in range(job.cargo_units):
             _draw_payload(false, cargo_index, 0, job.presentation)
             cargo_index += 1
+    # Empty seats are still seats: draw the furniture so 0/4 reads as four
+    # visibly empty places, not four dark rectangles.
+    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
+    var seat_anchors: Array = _anchors.get("seats", [])
+    var empty_seat: Texture2D = _texture("ui/seat_empty.png")
+    if empty_seat != null:
+        for i in range(seat_index, mini(int(limits["seats"]), seat_anchors.size())):
+            var centre: Vector2 = _slot_screen_position(true, i)
+            var drawn_seat: Vector2 = empty_seat.get_size() * float(HERO_SCALE)
+            draw_texture_rect(empty_seat, Rect2((centre - drawn_seat * 0.5).round(), drawn_seat), false)
 
 func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String) -> void:
     var texture: Texture2D = _payload_texture(is_seat, variant, presentation)

@@ -443,3 +443,72 @@ def cabin_crate(kind: str = "box") -> Canvas:
 PASSENGER_SHIRTS: list[str] = [
     "accent_teal", "accent_orange", "accent_green", "accent_red", "livery_light",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Job-card portraits, cabin furniture and clouds
+# ---------------------------------------------------------------------------
+
+## (hair colour, shirt colour) per portrait variant.
+PORTRAITS: list[tuple[str, str]] = [
+    ("soil", "accent_teal"),
+    ("outline", "accent_orange"),
+    ("sand_light", "btn_green"),
+    ("accent_red", "btn_blue"),
+    ("metal", "accent_yellow"),
+]
+
+
+def portrait(hair: str, shirt: str) -> Canvas:
+    """A 14x14 head-and-shoulders for job cards — big enough to have a face."""
+    canvas = Canvas(14, 14)
+    canvas.rect(1, 10, 12, 4, shirt)            # shoulders
+    canvas.hline(1, 12, 10, "white")            # collar
+    canvas.rect(4, 2, 6, 8, "sand_light")       # head
+    canvas.hline(4, 9, 2, hair)                 # hair
+    canvas.hline(4, 9, 3, hair)
+    canvas.plot(4, 4, hair)
+    canvas.plot(9, 4, hair)
+    canvas.plot(5, 5, "outline")                # eyes
+    canvas.plot(8, 5, "outline")
+    canvas.hline(6, 7, 8, "sand")               # mouth shadow
+    canvas.outline()
+    return canvas
+
+
+def seat_empty() -> Canvas:
+    """An empty cabin seat, drawn into a window slot so 0/4 reads as four
+    visibly empty seats rather than four dark rectangles."""
+    canvas = Canvas(11, 11)
+    canvas.rect(1, 1, 3, 8, "roof_cargo")       # backrest
+    canvas.vline(1, 1, 8, "sand_light")
+    canvas.rect(1, 7, 8, 3, "roof_cargo")       # cushion
+    canvas.hline(1, 8, 7, "sand_light")
+    canvas.hline(2, 8, 9, "soil")
+    canvas.outline()
+    return canvas
+
+
+def cloud(width: int, height: int, seed: int) -> Canvas:
+    """A chunky flat-bottomed cartoon cloud."""
+    canvas = Canvas(width, height)
+    rng = _rng(seed)
+    base_y = height - max(3, height // 3)
+    blobs = max(3, width // 10)
+    for i in range(blobs):
+        t = i / max(1, blobs - 1)
+        cx = 5 + t * (width - 10)
+        rx = float(rng.uniform(width * 0.13, width * 0.20))
+        ry = float(rng.uniform(height * 0.26, height * 0.40))
+        cy = base_y - ry * 0.6 - float(rng.uniform(0, height * 0.14))
+        canvas.ellipse(cx, cy, rx, ry, "white")
+    canvas.rect(3, base_y, width - 6, height - base_y - 2, "white")
+    canvas.hline(4, width - 5, height - 3, "ice")
+    canvas.hline(3, width - 4, height - 4, "ice_light")
+    canvas.outline()
+    return canvas
+
+
+CLOUDS: list[tuple[str, int, int, int]] = [
+    ("cloud_0", 24, 12, 41), ("cloud_1", 36, 16, 42), ("cloud_2", 48, 20, 43),
+]

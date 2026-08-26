@@ -286,7 +286,7 @@ func _load_verdict(job: Job) -> Dictionary:
     var plane: AircraftInstance = sim.state.aircraft.get(selected_aircraft_id, null)
     if plane == null:
         return Rules.no("Pick an aircraft")
-    return Rules.can_load(plane, sim.db.aircraft.get(plane.family_id, {}), job,
+    return Rules.can_load(plane, sim.family_of(plane), job,
         sim.state.loaded_jobs(plane.id))
 
 func _on_job_pressed(job: Job) -> void:

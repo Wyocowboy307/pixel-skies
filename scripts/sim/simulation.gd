@@ -15,6 +15,8 @@ signal flight_phase_changed(leg: FlightLeg, phase: FlightLeg.Phase)
 signal flight_arrived(settlement: Dictionary)
 signal aircraft_purchased(aircraft: AircraftInstance)
 signal airport_upgraded(airport_id: String, upgrade_id: String)
+signal aircraft_upgraded(aircraft: AircraftInstance, upgrade_id: String)
+signal aircraft_customized(aircraft: AircraftInstance)
 
 var db: GameDB
 var clock: GameClock
@@ -146,7 +148,7 @@ func load_job(aircraft_id: String, job_id: String) -> Dictionary:
     var job: Job = state.jobs.get(job_id, null)
     if plane == null or job == null:
         return Rules.no("That aircraft or job no longer exists")
-    var family: Dictionary = db.aircraft.get(plane.family_id, {})
+    var family: Dictionary = family_of(plane)
     var verdict: Dictionary = Rules.can_load(plane, family, job, state.loaded_jobs(aircraft_id))
     if not bool(verdict["ok"]):
         return verdict
@@ -179,7 +181,7 @@ func dispatch_check(aircraft_id: String, destination_id: String) -> Dictionary:
     var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)
     if plane == null:
         return Rules.no("No such aircraft")
-    var family: Dictionary = db.aircraft.get(plane.family_id, {})
+    var family: Dictionary = family_of(plane)
     var origin: Dictionary = db.airports.get(plane.location_id, {})
     var destination: Dictionary = db.airports.get(destination_id, {})
     var distance: float = flights.distance_between(plane.location_id, destination_id)
@@ -191,7 +193,7 @@ func dispatch_preview(aircraft_id: String, destination_id: String) -> Dictionary
     var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)
     if plane == null:
         return {}
-    var family: Dictionary = db.aircraft.get(plane.family_id, {})
+    var family: Dictionary = family_of(plane)
     var origin: Dictionary = db.airports.get(plane.location_id, {})
     var destination: Dictionary = db.airports.get(destination_id, {})
     var distance: float = flights.distance_between(plane.location_id, destination_id)
@@ -210,6 +212,65 @@ func dispatch(aircraft_id: String, destination_id: String) -> Dictionary:
     flight_dispatched.emit(leg)
     jobs_changed.emit(leg.origin_id)
     return {"ok": true, "reason": "", "flight_id": leg.id}
+
+## The family record with this airframe's purchased upgrades applied. Any code
+## answering questions about an owned aircraft goes through this, so bought
+## capacity and range are never forgotten.
+func family_of(plane: AircraftInstance) -> Dictionary:
+    if plane == null:
+        return {}
+    return Rules.effective_family(db.aircraft.get(plane.family_id, {}), plane.upgrade_ids)
+
+func aircraft_upgrade_check(aircraft_id: String, upgrade_id: String) -> Dictionary:
+    var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)
+    if plane == null:
+        return Rules.no("No such aircraft")
+    if plane.state == AircraftInstance.State.IN_FLIGHT:
+        return Rules.no("Cannot refit an aircraft in flight")
+    var upgrade: Dictionary = _find_aircraft_upgrade(plane, upgrade_id)
+    if upgrade.is_empty():
+        return Rules.no("Unknown upgrade")
+    if plane.upgrade_ids.has(upgrade_id):
+        return Rules.no("Already installed")
+    var cost: int = int(upgrade.get("cost", 0))
+    if state.money < cost:
+        return Rules.no("Need $%s — you have $%s" % [_money(cost), _money(state.money)])
+    return Rules.ok()
+
+func purchase_aircraft_upgrade(aircraft_id: String, upgrade_id: String) -> Dictionary:
+    var verdict: Dictionary = aircraft_upgrade_check(aircraft_id, upgrade_id)
+    if not bool(verdict["ok"]):
+        return verdict
+    var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)
+    var upgrade: Dictionary = _find_aircraft_upgrade(plane, upgrade_id)
+    state.money -= int(upgrade.get("cost", 0))
+    plane.upgrade_ids.append(upgrade_id)
+    aircraft_upgraded.emit(plane, upgrade_id)
+    money_changed.emit(state.money)
+    return Rules.ok()
+
+func _find_aircraft_upgrade(plane: AircraftInstance, upgrade_id: String) -> Dictionary:
+    var family: Dictionary = db.aircraft.get(plane.family_id, {})
+    for entry: Variant in family.get("upgrades", []):
+        if String((entry as Dictionary).get("id", "")) == upgrade_id:
+            return entry
+    return {}
+
+## Records a livery/nickname change and announces it so caches invalidate.
+func customize_aircraft(aircraft_id: String, changes: Dictionary) -> Dictionary:
+    var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)
+    if plane == null:
+        return Rules.no("No such aircraft")
+    if changes.has("nickname"):
+        plane.nickname = String(changes["nickname"]).strip_edges().substr(0, 14)
+    if changes.has("livery_body"):
+        plane.livery_body = String(changes["livery_body"])
+    if changes.has("livery_accent"):
+        plane.livery_accent = String(changes["livery_accent"])
+    if changes.has("livery_tail"):
+        plane.livery_tail = String(changes["livery_tail"])
+    aircraft_customized.emit(plane)
+    return Rules.ok()
 
 func flight_for_aircraft(aircraft_id: String) -> FlightLeg:
     var plane: AircraftInstance = state.aircraft.get(aircraft_id, null)

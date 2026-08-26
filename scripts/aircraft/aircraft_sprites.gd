@@ -13,6 +13,8 @@ extends RefCounted
 const DEFAULT_FRAMES := 32
 const GROUND_STRIP := "aircraft/%s/%s_top_rot.png"
 const MAP_STRIP := "aircraft/%s/%s_map_rot.png"
+const MAP_STRIP_BANK_LEFT := "aircraft/%s/%s_map_bankl.png"
+const MAP_STRIP_BANK_RIGHT := "aircraft/%s/%s_map_bankr.png"
 const SIDE_SPRITE := "aircraft/%s/%s_side.png"
 
 static var _cache: Dictionary = {}
@@ -31,6 +33,15 @@ static func ground_strip(family_id: String) -> Texture2D:
 
 static func map_strip(family_id: String) -> Texture2D:
     var key: String = _key(family_id)
+    return _load(MAP_STRIP % [key, key])
+
+## The level strip, or a banked variant: bank < 0 left wing down, > 0 right.
+static func map_strip_banked(family_id: String, bank: int) -> Texture2D:
+    var key: String = _key(family_id)
+    if bank < 0:
+        return _load(MAP_STRIP_BANK_LEFT % [key, key])
+    if bank > 0:
+        return _load(MAP_STRIP_BANK_RIGHT % [key, key])
     return _load(MAP_STRIP % [key, key])
 
 static func side_sprite(family_id: String) -> Texture2D:
@@ -72,3 +83,14 @@ static func draw_ground(canvas: CanvasItem, family_id: String, at: Vector2,
 static func draw_map(canvas: CanvasItem, family_id: String, at: Vector2,
         heading_radians: float, scale: int = 1) -> void:
     draw_frame(canvas, map_strip(family_id), at, heading_radians, scale)
+
+# Livery-aware draws. These are what presentation should call for an owned
+# aircraft, so the player's paint scheme shows everywhere the plane does.
+
+static func draw_ground_for(canvas: CanvasItem, plane: AircraftInstance, at: Vector2,
+        heading_radians: float, scale: int = 1) -> void:
+    draw_frame(canvas, LiverySprites.ground_strip(plane), at, heading_radians, scale)
+
+static func draw_map_for(canvas: CanvasItem, plane: AircraftInstance, at: Vector2,
+        heading_radians: float, scale: int = 1, bank: int = 0) -> void:
+    draw_frame(canvas, LiverySprites.map_strip(plane, bank), at, heading_radians, scale)

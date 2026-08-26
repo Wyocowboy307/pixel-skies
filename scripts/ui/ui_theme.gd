@@ -17,16 +17,42 @@ const MARGIN := 4.0
 static func colour(key: String) -> Color:
     return PixelPalette.get_colour(key)
 
-## A big, obviously-pressable action button (Load / Route / Fly).
-static func action(text: String) -> Button:
+## A big saturated action button. kind: "green" | "blue" | "orange".
+static func big_button(text: String, kind: String = "green") -> Button:
     var node := Button.new()
     node.text = text
-    node.theme_type_variation = "ActionButton"
-    node.add_theme_font_size_override("font_size", FONT_SIZE)
-    node.custom_minimum_size = Vector2(72.0, 22.0)
+    node.theme_type_variation = "Btn" + kind.capitalize()
+    node.custom_minimum_size = Vector2(86.0, 28.0)
     return node
 
-static func label(text: String, colour_key: String = "ink") -> Label:
+## Kept for older call sites; routes to the big orange button.
+static func action(text: String) -> Button:
+    return big_button(text, "orange")
+
+## A heading at 2x the bitmap font — crisp, since 14 is an integer multiple of 7.
+static func heading(text: String, colour_key: String = "navy") -> Label:
+    var node := Label.new()
+    node.text = text
+    node.add_theme_font_size_override("font_size", FONT_SIZE * 2)
+    node.add_theme_color_override("font_color", colour(colour_key))
+    return node
+
+## A FITS / NO SPACE verdict chip for job cards.
+static func fits_badge(fits: bool) -> Label:
+    var node := Label.new()
+    node.text = "FITS" if fits else "NO SPACE"
+    node.add_theme_font_size_override("font_size", FONT_SIZE)
+    node.add_theme_color_override("font_color", colour("white"))
+    var style := StyleBoxFlat.new()
+    style.bg_color = colour("btn_green" if fits else "btn_red")
+    style.content_margin_left = 4.0
+    style.content_margin_right = 4.0
+    style.content_margin_top = 1.0
+    style.content_margin_bottom = 1.0
+    node.add_theme_stylebox_override("normal", style)
+    return node
+
+static func label(text: String, colour_key: String = "navy") -> Label:
     var node := Label.new()
     node.text = text
     node.add_theme_font_size_override("font_size", FONT_SIZE)

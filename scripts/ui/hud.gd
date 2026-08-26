@@ -35,6 +35,7 @@ func bind_sim(simulation: Simulation) -> void:
 
 func _build_top_bar() -> void:
     var bar := PanelContainer.new()
+    bar.theme_type_variation = "HudBar"
     bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
     bar.offset_bottom = UiTheme.TOP_BAR_HEIGHT + 3.0
     bar.offset_left = -4.0
@@ -49,11 +50,11 @@ func _build_top_bar() -> void:
     bar.add_child(row)
 
     row.add_child(UiTheme.icon("money"))
-    _money_label = UiTheme.label("", "accent_orange")
+    _money_label = UiTheme.label("", "white")
     row.add_child(_money_label)
 
     row.add_child(UiTheme.icon("plane"))
-    _fleet_label = UiTheme.label("", "text_dim")
+    _fleet_label = UiTheme.label("", "card_hi")
     row.add_child(_fleet_label)
 
     var spacer := Control.new()
@@ -61,7 +62,7 @@ func _build_top_bar() -> void:
     spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
     row.add_child(spacer)
 
-    _zoom_label = UiTheme.label("", "text_dim")
+    _zoom_label = UiTheme.label("", "card_hi")
     row.add_child(_zoom_label)
 
 func _build_airport_card() -> void:
@@ -78,7 +79,7 @@ func _build_airport_card() -> void:
     column.add_theme_constant_override("separation", 1)
     _card.add_child(column)
 
-    _card_code = UiTheme.label("", "accent_orange")
+    _card_code = UiTheme.heading("", "accent_orange")
     column.add_child(_card_code)
     _card_city = UiTheme.label("", "text")
     column.add_child(_card_city)

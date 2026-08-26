@@ -1,10 +1,10 @@
 class_name PixelTheme
 extends RefCounted
-## Builds the game's Theme from the generated pixel frames.
+## Builds the game Theme from the generated pixel frames.
 ##
-## Every panel, button and row is a 9-slice of a hand-generated sprite, so the
-## management UI belongs to the same world as the airfield beneath it. Nothing
-## here uses a rounded rect, a gradient or a system font.
+## The direction is a bright pixel game, not an admin panel: white cards with a
+## navy edge, saturated chunky buttons, a sky-blue HUD bar. Everything is a
+## 9-slice of a generated sprite and every colour comes from the locked palette.
 
 const FONT := "ui/font5x7.fnt"
 const FRAME_DIR := "ui/%s.png"
@@ -16,46 +16,58 @@ static func build() -> Theme:
     theme.default_font = font
     theme.default_font_size = FONT_SIZE
 
-    # Warm card panels rather than dark instrument bezels.
-    theme.set_stylebox("panel", "PanelContainer", _frame("warm_panel", 4, 3))
-    theme.set_stylebox("panel", "Panel", _frame("warm_panel", 4, 3))
+    # Cards are the default surface.
+    theme.set_stylebox("panel", "PanelContainer", _frame("card", 6, 4))
+    theme.set_stylebox("panel", "Panel", _frame("card", 6, 4))
+    theme.set_type_variation("CardRaised", "PanelContainer")
+    theme.set_stylebox("panel", "CardRaised", _frame("card_raised", 6, 4))
+    theme.set_type_variation("HudBar", "PanelContainer")
+    theme.set_stylebox("panel", "HudBar", _frame("hud_bar", 6, 3))
 
+    # Plain buttons: cream, chunky.
     for state: String in ["normal", "hover", "pressed", "disabled"]:
-        theme.set_stylebox(state, "Button", _frame("warm_button_%s" % state, 3, 2))
-    theme.set_stylebox("focus", "Button", _frame("warm_button_hover", 3, 2))
+        theme.set_stylebox(state, "Button", _frame("btn_plain_%s" % state, 6, 3))
+    theme.set_stylebox("focus", "Button", _frame("btn_plain_hover", 6, 3))
     theme.set_font("font", "Button", font)
     theme.set_font_size("font_size", "Button", FONT_SIZE)
-    theme.set_color("font_color", "Button", PixelPalette.get_colour("ink"))
-    theme.set_color("font_hover_color", "Button", PixelPalette.get_colour("panel_deep"))
-    theme.set_color("font_pressed_color", "Button", PixelPalette.get_colour("panel_deep"))
-    theme.set_color("font_disabled_color", "Button", PixelPalette.get_colour("ink_soft"))
-    theme.set_constant("h_separation", "Button", 2)
+    theme.set_color("font_color", "Button", PixelPalette.get_colour("navy"))
+    theme.set_color("font_hover_color", "Button", PixelPalette.get_colour("navy_deep"))
+    theme.set_color("font_pressed_color", "Button", PixelPalette.get_colour("card_hi"))
+    theme.set_color("font_disabled_color", "Button", PixelPalette.get_colour("card_lo"))
+    theme.set_constant("h_separation", "Button", 3)
 
-    # Big obvious action buttons — Load, Route, Fly — as a type variation.
-    for state: String in ["normal", "hover", "pressed", "disabled"]:
-        theme.set_stylebox(state, "ActionButton", _frame("action_%s" % state, 4, 4))
-    theme.set_type_variation("ActionButton", "Button")
-    theme.set_font("font", "ActionButton", font)
-    theme.set_font_size("font_size", "ActionButton", FONT_SIZE)
-    theme.set_color("font_color", "ActionButton", PixelPalette.get_colour("panel_deep"))
-    theme.set_color("font_hover_color", "ActionButton", PixelPalette.get_colour("panel_deep"))
-    theme.set_color("font_pressed_color", "ActionButton", PixelPalette.get_colour("white"))
-    theme.set_color("font_disabled_color", "ActionButton", PixelPalette.get_colour("ink_soft"))
+    # The three big saturated actions: LOAD, ROUTE, FLY.
+    for kind: String in ["green", "blue", "orange"]:
+        var variation: String = "Btn" + kind.capitalize()
+        theme.set_type_variation(variation, "Button")
+        for state: String in ["normal", "hover", "pressed", "disabled"]:
+            theme.set_stylebox(state, variation, _frame("btn_%s_%s" % [kind, state], 6, 4))
+        theme.set_font("font", variation, font)
+        theme.set_font_size("font_size", variation, FONT_SIZE * 2)
+        theme.set_color("font_color", variation, PixelPalette.get_colour("white"))
+        theme.set_color("font_hover_color", variation, PixelPalette.get_colour("white"))
+        theme.set_color("font_pressed_color", variation, PixelPalette.get_colour("card_hi"))
+        theme.set_color("font_disabled_color", variation, PixelPalette.get_colour("card_hi"))
 
     theme.set_font("font", "Label", font)
     theme.set_font_size("font_size", "Label", FONT_SIZE)
-    theme.set_color("font_color", "Label", PixelPalette.get_colour("ink"))
+    theme.set_color("font_color", "Label", PixelPalette.get_colour("navy"))
 
-    # Scrollbars: thin solid bars, no rounded grabbers.
+    # Text entry (registration, nickname) on the customize screen.
+    theme.set_stylebox("normal", "LineEdit", _frame("card_raised", 6, 3))
+    theme.set_stylebox("focus", "LineEdit", _frame("btn_blue_hover", 6, 3))
+    theme.set_font("font", "LineEdit", font)
+    theme.set_font_size("font_size", "LineEdit", FONT_SIZE)
+    theme.set_color("font_color", "LineEdit", PixelPalette.get_colour("navy"))
+    theme.set_color("caret_color", "LineEdit", PixelPalette.get_colour("accent_orange"))
+
     for axis: String in ["VScrollBar", "HScrollBar"]:
-        theme.set_stylebox("scroll", axis, _flat("ui_bg"))
-        theme.set_stylebox("grabber", axis, _flat("ui_border"))
-        theme.set_stylebox("grabber_highlight", axis, _flat("ui_border_light"))
+        theme.set_stylebox("scroll", axis, _flat("card_lo"))
+        theme.set_stylebox("grabber", axis, _flat("navy"))
+        theme.set_stylebox("grabber_highlight", axis, _flat("hud_blue"))
         theme.set_stylebox("grabber_pressed", axis, _flat("accent_orange"))
     return theme
 
-## 9-slice from a generated frame sprite. `border` is the slice inset; `margin`
-## is how far content is kept clear of the frame.
 static func _frame(name: String, border: int, margin: int) -> StyleBoxTexture:
     var style := StyleBoxTexture.new()
     style.texture = AssetPaths.load_texture(FRAME_DIR % name)

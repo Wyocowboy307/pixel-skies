@@ -62,6 +62,17 @@ static func _validate_aircraft(db: GameDB, errors: PackedStringArray) -> void:
             elif float(ac[stat_key]) <= 0.0:
                 errors.append("%s: %s must be positive" % [where, stat_key])
         _require_band(ac.get("runway_band_required", 0), where, "runway_band_required", errors)
+        var upgrade_ids: Dictionary = {}
+        for entry: Variant in ac.get("upgrades", []):
+            var upgrade: Dictionary = entry
+            var uid: String = String(upgrade.get("id", ""))
+            if uid.is_empty() or upgrade_ids.has(uid):
+                errors.append("%s: missing or duplicate upgrade id '%s'" % [where, uid])
+            upgrade_ids[uid] = true
+            if int(upgrade.get("cost", 0)) <= 0:
+                errors.append("%s: upgrade '%s' cost must be positive" % [where, uid])
+            if (upgrade.get("effects", {}) as Dictionary).is_empty():
+                errors.append("%s: upgrade '%s' has no effects" % [where, uid])
         # Art may legitimately not exist yet, but the path must be declared so the
         # art pipeline has a stable destination to generate into.
         for art_key: String in ["art_top", "art_side"]:

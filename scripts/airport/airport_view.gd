@@ -472,7 +472,7 @@ func _draw_parked_aircraft() -> void:
         if place.is_empty():
             continue
         var at: Vector2 = place["position"]
-        draw_aircraft(plane.family_id, at, float(place["heading"]))
+        AircraftSprites.draw_ground_for(self, plane, at, float(place["heading"]))
 
         if plane.id == selected_aircraft_id:
             var box := 30.0
@@ -521,7 +521,7 @@ func _draw_movements() -> void:
         if bool(state.get("touchdown_puff", false)):
             _draw_puff(at)
 
-        AircraftSprites.draw_ground(self, plane.family_id, at, heading)
+        AircraftSprites.draw_ground_for(self, plane, at, heading)
         if bool(state.get("engines", false)):
             _draw_spinning_prop(plane.family_id, at, heading)
 

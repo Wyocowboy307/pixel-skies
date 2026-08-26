@@ -19,6 +19,11 @@ var state: State = State.PARKED
 var flight_id := ""
 var loaded_job_ids: Array[String] = []
 var configuration := "mixed"
+var upgrade_ids: Array[String] = []
+## Livery choices; empty string means the family default scheme.
+var livery_body := ""
+var livery_accent := ""
+var livery_tail := ""
 var condition := 1.0
 var hours := 0.0
 var legs := 0
@@ -37,6 +42,9 @@ func to_dict() -> Dictionary:
         "location_id": location_id, "stand_id": stand_id, "state": int(state),
         "flight_id": flight_id, "loaded_job_ids": loaded_job_ids.duplicate(),
         "configuration": configuration, "condition": condition,
+        "upgrade_ids": upgrade_ids.duplicate(),
+        "livery_body": livery_body, "livery_accent": livery_accent,
+        "livery_tail": livery_tail,
         "hours": hours, "legs": legs, "lifetime_revenue": lifetime_revenue,
     }
 
@@ -53,6 +61,13 @@ static func from_dict(data: Dictionary) -> AircraftInstance:
     aircraft.state = data.get("state", State.PARKED) as State
     aircraft.flight_id = String(data.get("flight_id", ""))
     aircraft.configuration = String(data.get("configuration", "mixed"))
+    var owned: Array[String] = []
+    for entry: Variant in data.get("upgrade_ids", []):
+        owned.append(String(entry))
+    aircraft.upgrade_ids = owned
+    aircraft.livery_body = String(data.get("livery_body", ""))
+    aircraft.livery_accent = String(data.get("livery_accent", ""))
+    aircraft.livery_tail = String(data.get("livery_tail", ""))
     aircraft.condition = float(data.get("condition", 1.0))
     aircraft.hours = float(data.get("hours", 0.0))
     aircraft.legs = int(data.get("legs", 0))

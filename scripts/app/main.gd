@@ -24,6 +24,8 @@ var _airport_view: AirportView
 var _airport_camera: AirportCamera
 var _airport_hud: AirportHud
 var _detail_view: AircraftDetailView
+var _customize_view: CustomizeView
+var _upgrade_view: UpgradeView
 ## The view to return to when the aircraft detail screen closes.
 var _detail_return: View = View.WORLD
 var _busy := false
@@ -295,6 +297,37 @@ func _on_airport_follow_point(at: Vector2, active: bool) -> void:
     if _airport_hud != null:
         _airport_hud.set_watching(active)
 
+## Customize and Upgrade sit over the plane screen and hand back to it, so the
+## player never loses their place.
+func open_customize(aircraft_id: String) -> void:
+    if _customize_view != null or _upgrade_view != null:
+        return
+    _customize_view = CustomizeView.new()
+    _customize_view.theme = _ui_theme
+    $UI.add_child(_customize_view)
+    _customize_view.bind(sim, aircraft_id)
+    _customize_view.closed.connect(_close_overlay_screen)
+
+func open_upgrade(aircraft_id: String) -> void:
+    if _customize_view != null or _upgrade_view != null:
+        return
+    _upgrade_view = UpgradeView.new()
+    _upgrade_view.theme = _ui_theme
+    $UI.add_child(_upgrade_view)
+    _upgrade_view.bind(sim, aircraft_id)
+    _upgrade_view.closed.connect(_close_overlay_screen)
+
+func _close_overlay_screen() -> void:
+    if _customize_view != null:
+        _customize_view.queue_free()
+        _customize_view = null
+    if _upgrade_view != null:
+        _upgrade_view.queue_free()
+        _upgrade_view = null
+    if _detail_view != null:
+        _detail_view._load_anchors()
+        _detail_view.refresh()
+
 func close_aircraft_detail() -> void:
     if _view != View.AIRCRAFT:
         return
@@ -337,6 +370,9 @@ func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):
         return
     get_viewport().set_input_as_handled()
+    if _customize_view != null or _upgrade_view != null:
+        _close_overlay_screen()
+        return
     if _view == View.AIRCRAFT:
         close_aircraft_detail()
         return

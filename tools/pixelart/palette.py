@@ -71,6 +71,22 @@ PALETTE: dict[str, str] = {
     "map_tundra": "#a6bcab",
     "map_snow": "#eef6fa",
     "map_river": "#4aa3d6",
+    # Bright game chrome. The management screens read as an admin panel in the
+    # muted ramp; these are the saturated colours the game UI is built from.
+    "hud_blue": "#3fa7dd",
+    "hud_blue_deep": "#28709f",
+    "card": "#fdf3da",
+    "card_hi": "#fffdf2",
+    "card_lo": "#e2cc9c",
+    "navy": "#22374d",
+    "navy_deep": "#162536",
+    "btn_green": "#5cb84d",
+    "btn_green_hi": "#93de77",
+    "btn_green_lo": "#377f39",
+    "btn_blue": "#4498dc",
+    "btn_blue_hi": "#86c9f1",
+    "btn_blue_lo": "#2d669f",
+    "btn_red": "#d95c49",
     # Daylight. The detail screen stands the aircraft outside in good weather
     # rather than in a dark instrument bay.
     "sky": "#7fb6d1",
