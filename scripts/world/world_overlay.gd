@@ -27,8 +27,27 @@ const MARKER_SPRITES := {
     "dot": "world/marker_dot.png",
 }
 
+## Heading change (radians per second of wall time) beyond which a flight is
+## drawn from its banked strip instead of the level one.
+const BANK_RATE_THRESHOLD := 0.015
+## Eastward cloud drift in world units per minute — weather, not traffic.
+const CLOUD_DRIFT_PER_MINUTE := 3.0
+const CLOUD_MIN_ZOOM := 1.0
+
 var _sprites: Dictionary = {}
 var _font: Font
+
+## leg id -> [heading_radians, ticks_msec], pruned as flights settle. Only the
+## rate matters, so presentation state never touches the simulation.
+var _prev_heading: Dictionary = {}
+## family_id|bank -> banked map strip (or null when the family ships none).
+var _bank_strips: Dictionary = {}
+
+## Fixed, seeded cloud field: {world: Vector2, kind: int}. Drift is added at
+## draw time so the seeds themselves never move.
+var _cloud_seeds: Array[Dictionary] = []
+var _cloud_sprites: Array[Texture2D] = []
+var _cloud_drift := 0.0
 
 var db: GameDB
 var camera: WorldCamera
@@ -58,6 +77,10 @@ func _ready() -> void:
         var texture: Texture2D = AssetPaths.load_texture(String(MARKER_SPRITES[key]))
         if texture != null:
             _sprites[key] = texture
+    for index in range(3):
+        var cloud: Texture2D = AssetPaths.load_texture("world/cloud_%d.png" % index)
+        if cloud != null:
+            _cloud_sprites.append(cloud)
 
 func _colour(key: String) -> Color:
     return PixelPalette.get_colour(key)
@@ -74,6 +97,32 @@ func bind(database: GameDB, world_camera: WorldCamera, simulation: Simulation = 
     sim = simulation
     camera.view_changed.connect(queue_redraw)
     _rebuild_routes()
+    _seed_clouds()
+
+## Fixed cloud positions, seeded around the airports the player actually looks
+## at rather than scattered over empty ocean. The same seed always produces the
+## same sky, so captures are reproducible.
+func _seed_clouds() -> void:
+    _cloud_seeds.clear()
+    if _cloud_sprites.is_empty() or db == null:
+        return
+    var rng := RandomNumberGenerator.new()
+    rng.seed = 0x5049_5853
+    var airport_ids: Array = db.airports.keys()
+    airport_ids.sort()
+    var index := 0
+    for airport_id: String in airport_ids:
+        var airport: Dictionary = db.airports[airport_id]
+        for i in range(3):
+            var lat: float = float(airport["lat"]) + rng.randf_range(-3.5, 3.5)
+            var lon: float = float(airport["lon"]) + rng.randf_range(-5.0, 5.0)
+            _cloud_seeds.append({
+                "world": WorldProjection.to_world(clampf(lat, -80.0, 80.0), lon),
+                "kind": index % _cloud_sprites.size(),
+            })
+            index += 1
+            if _cloud_seeds.size() >= 9:
+                return
 
 func _rebuild_routes() -> void:
     # Vertical-slice network. Milestone 3 replaces this with the airline's real
@@ -86,7 +135,11 @@ func _rebuild_routes() -> void:
 
 func _process(delta: float) -> void:
     _pulse = fposmod(_pulse + delta, TAU)
+    _cloud_drift = fposmod(
+        _cloud_drift + delta * CLOUD_DRIFT_PER_MINUTE / 60.0, WorldProjection.WORLD_SIZE.x)
     if sim != null and not sim.state.active_flights().is_empty():
+        queue_redraw()
+    elif _clouds_visible():
         queue_redraw()
     var previous := hovered_airport_id
     hovered_airport_id = _airport_at(get_viewport().get_mouse_position())
@@ -189,6 +242,9 @@ func _draw() -> void:
     if db == null or camera == null:
         return
     _draw_routes()
+    # Clouds sit above the terrain and its route trails but below every marker,
+    # label and aircraft: weather never hides information.
+    _draw_clouds()
     var visible: Array[Dictionary] = _visible_airports()
     _obstacles.clear()
     for entry: Dictionary in visible:
@@ -196,6 +252,33 @@ func _draw() -> void:
     for entry: Dictionary in _label_order(visible):
         _draw_label(entry)
     _draw_flights()
+
+# ---------------------------------------------------------------------------
+# Clouds
+# ---------------------------------------------------------------------------
+
+func _clouds_visible() -> bool:
+    return not _cloud_seeds.is_empty() and camera != null \
+        and camera.current_zoom() >= CLOUD_MIN_ZOOM
+
+## A drifting cloud field between the terrain and the traffic. Far out the map
+## is an atlas, not a sky, so clouds only appear once zoomed to regional level.
+func _draw_clouds() -> void:
+    if not _clouds_visible():
+        return
+    var scale: int = _map_pixel_scale()
+    for puff: Dictionary in _cloud_seeds:
+        var texture: Texture2D = _cloud_sprites[int(puff["kind"])]
+        var base: Vector2 = puff["world"]
+        var world := Vector2(
+            fposmod(base.x + _cloud_drift, WorldProjection.WORLD_SIZE.x), base.y)
+        var at: Vector2 = _snap(camera.world_to_screen(_nearest_copy(world)))
+        var drawn: Vector2 = texture.get_size() * float(scale)
+        var origin: Vector2 = _snap(at - drawn * 0.5)
+        if origin.x > size.x or origin.y > size.y \
+                or origin.x + drawn.x < 0.0 or origin.y + drawn.y < 0.0:
+            continue
+        draw_texture_rect(texture, Rect2(origin, drawn), false)
 
 func _visible_airports() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
@@ -355,7 +438,9 @@ func _draw_flights() -> void:
     var now: float = sim.now()
     var scale: int = _map_pixel_scale()
     var font: Font = _font
+    var active_ids: Dictionary = {}
     for leg: FlightLeg in sim.state.active_flights():
+        active_ids[leg.id] = true
         var place: Dictionary = sim.flights.position_of(leg, now)
         var world: Vector2 = _nearest_copy(
             WorldProjection.to_world(float(place["lat"]), float(place["lon"])))
@@ -378,18 +463,64 @@ func _draw_flights() -> void:
 
         if leg.aircraft_id == selected_aircraft_id:
             _draw_track(leg, scale)
-        AircraftSprites.draw_map(self, plane.family_id, at, heading, scale)
+        var strip: Texture2D = _strip_for(plane.family_id, _bank_of(leg.id, heading))
+        AircraftSprites.draw_frame(self, strip, at, heading, scale)
         if leg.aircraft_id == selected_aircraft_id:
-            _flight_tag(font, plane, leg, at, now, scale)
+            _callsign_chip(font, plane, leg, at, now, scale)
+        elif camera.current_zoom() >= 1.0:
+            _registration_tag(font, plane, at, scale)
+    _prune_headings(active_ids)
+
+# ---------------------------------------------------------------------------
+# Banking
+# ---------------------------------------------------------------------------
+
+## Level or banked map strip. A turning aircraft dips a wing: pure presentation,
+## chosen from the heading rate between two drawn frames.
+func _strip_for(family_id: String, bank: int) -> Texture2D:
+    if bank == 0:
+        return AircraftSprites.map_strip(family_id)
+    var key: String = "%s|%d" % [family_id, bank]
+    if not _bank_strips.has(key):
+        var family_key: String = family_id.replace("ac_", "")
+        var suffix: String = "bankl" if bank < 0 else "bankr"
+        _bank_strips[key] = AssetPaths.load_texture(
+            "aircraft/%s/%s_map_%s.png" % [family_key, family_key, suffix])
+    var strip: Texture2D = _bank_strips[key]
+    return strip if strip != null else AircraftSprites.map_strip(family_id)
+
+## -1 banking left, 1 banking right, 0 level, from the wall-clock heading rate.
+func _bank_of(leg_id: String, heading: float) -> int:
+    var ticks: int = Time.get_ticks_msec()
+    var previous: Array = _prev_heading.get(leg_id, [])
+    _prev_heading[leg_id] = [heading, ticks]
+    if previous.is_empty():
+        return 0
+    var dt: float = float(ticks - int(previous[1])) / 1000.0
+    if dt <= 0.0 or dt > 1.0:
+        return 0
+    var rate: float = angle_difference(float(previous[0]), heading) / dt
+    if absf(rate) < BANK_RATE_THRESHOLD:
+        return 0
+    # Heading increases clockwise on screen, so a positive rate is a right turn.
+    return 1 if rate > 0.0 else -1
+
+func _prune_headings(active_ids: Dictionary) -> void:
+    for leg_id: String in _prev_heading.keys():
+        if not active_ids.has(leg_id):
+            _prev_heading.erase(leg_id)
 
 ## The remaining route of the selected flight, so "where is it going" is
-## answerable without opening a panel.
+## answerable without opening a panel. A solid orange trail with white dashes
+## running along it, so the watched route pops against every terrain.
 func _draw_track(leg: FlightLeg, scale: int) -> void:
     var origin: Dictionary = db.airports.get(leg.origin_id, {})
     var destination: Dictionary = db.airports.get(leg.destination_id, {})
     if origin.is_empty() or destination.is_empty():
         return
     var points: PackedVector2Array = _route_points(origin, destination)
+    var orange: Color = _colour("accent_orange")
+    var white: Color = _colour("white")
     var travelled := 0
     for i in range(points.size() - 1):
         var from: Vector2 = points[i]
@@ -397,22 +528,64 @@ func _draw_track(leg: FlightLeg, scale: int) -> void:
         var steps: int = maxi(1, int(from.distance_to(to)))
         for step in range(steps):
             travelled += 1
-            if (travelled / 2) % 2 == 1:
-                continue
             var at: Vector2 = _snap(from.lerp(to, float(step) / float(steps)))
-            draw_rect(Rect2(at, Vector2.ONE * float(scale)), _colour("accent_orange"))
+            var dashed: bool = (travelled / 3) % 4 == 0
+            draw_rect(Rect2(at, Vector2.ONE * float(scale)), white if dashed else orange)
 
-func _flight_tag(font: Font, plane: AircraftInstance, leg: FlightLeg,
+# ---------------------------------------------------------------------------
+# Callsign tags
+# ---------------------------------------------------------------------------
+
+## The selected flight wears a navy chip: who it is on top, where it is going
+## and how long is left underneath, with a little pointer down at the sprite.
+func _callsign_chip(font: Font, plane: AircraftInstance, leg: FlightLeg,
         at: Vector2, now: float, scale: int) -> void:
+    var name_line: String = plane.registration
+    if not plane.nickname.is_empty():
+        name_line = "%s  %s" % [plane.nickname.to_upper(), plane.registration]
     var destination: Dictionary = db.airports.get(leg.destination_id, {})
-    var text: String = "%s → %s · %s" % [
-        plane.display_name(), String(destination.get("code", "")),
+    var eta_line: String = "→ %s · %s" % [String(destination.get("code", "")),
         UiTheme.duration(leg.seconds_remaining(now))]
-    var origin: Vector2 = _snap(at + Vector2(9.0 * float(scale), -4.0))
+
+    var name_width: float = font.get_string_size(
+        name_line, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+    var eta_width: float = font.get_string_size(
+        eta_line, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+    var box_size := Vector2(maxf(name_width, eta_width) + 10.0, 23.0)
+    var gap: float = 10.0 * float(scale)
+    var box_origin: Vector2 = _snap(at + Vector2(-box_size.x * 0.5, -gap - box_size.y - 3.0))
+    box_origin.x = clampf(box_origin.x, 2.0, size.x - box_size.x - 2.0)
+    box_origin.y = maxf(box_origin.y, SAFE_AREA_TOP)
+
+    # Chunky navy card with a light edge and a pointer notch down to the plane.
+    draw_rect(Rect2(box_origin - Vector2.ONE, box_size + Vector2(2.0, 2.0)),
+        _colour("outline"))
+    draw_rect(Rect2(box_origin, box_size), _colour("ui_bg"))
+    draw_rect(Rect2(box_origin, Vector2(box_size.x, 1.0)), _colour("ui_border_light"))
+    var notch_x: float = clampf(at.x - 2.0, box_origin.x + 2.0, box_origin.x + box_size.x - 6.0)
+    draw_rect(Rect2(_snap(Vector2(notch_x, box_origin.y + box_size.y + 1.0)),
+        Vector2(4.0, 2.0)), _colour("outline"))
+    draw_rect(Rect2(_snap(Vector2(notch_x + 1.0, box_origin.y + box_size.y + 3.0)),
+        Vector2(2.0, 1.0)), _colour("outline"))
+
+    var text_at: Vector2 = _snap(box_origin + Vector2(5.0, 9.0))
+    draw_string(font, text_at, name_line, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("white"))
+    draw_string(font, text_at + Vector2(0.0, 10.0), eta_line, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("accent_orange_light"))
+
+## Every other on-screen flight gets its registration, small and shadowed, once
+## the player is close enough for it to mean something.
+func _registration_tag(font: Font, plane: AircraftInstance, at: Vector2, scale: int) -> void:
+    var text: String = plane.registration
+    var width: float = font.get_string_size(
+        text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+    var origin: Vector2 = _snap(at + Vector2(-width * 0.5, -8.0 * float(scale) - 3.0))
+    origin.y = maxf(origin.y, SAFE_AREA_TOP)
     draw_string(font, origin + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
         LABEL_FONT_SIZE, _colour("outline"))
     draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        LABEL_FONT_SIZE, _colour("accent_orange_light"))
+        LABEL_FONT_SIZE, _colour("white"))
 
 ## World position of an aircraft in flight, for the follow camera.
 func aircraft_world_position(aircraft_id: String) -> Vector2:
