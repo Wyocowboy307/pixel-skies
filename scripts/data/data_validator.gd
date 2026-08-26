@@ -15,6 +15,7 @@ static func validate(db: GameDB) -> PackedStringArray:
     _validate_aircraft(db, errors)
     _validate_upgrades(db, errors)
     _validate_job_templates(db, errors)
+    _validate_layouts(db, errors)
     return errors
 
 static func _validate_airports(db: GameDB, errors: PackedStringArray) -> void:
@@ -107,6 +108,35 @@ static func _validate_job_templates(db: GameDB, errors: PackedStringArray) -> vo
             var uhi: int = int(t.get("units_max", 0))
             if ulo <= 0 or uhi < ulo:
                 errors.append("%s: units_min/max invalid (%d..%d)" % [where, ulo, uhi])
+
+static func _validate_layouts(db: GameDB, errors: PackedStringArray) -> void:
+    # Every airport the player can open needs a layout, or zooming in lands on
+    # an empty scene.
+    for airport_id: String in db.airports:
+        if db.layout_for_airport(airport_id).is_empty():
+            errors.append("cities.json[%s]: no layout matches layout_id" % airport_id)
+    for id: String in db.airport_layouts:
+        var layout: Dictionary = db.airport_layouts[id]
+        var where: String = "airport_layouts.json[%s]" % id
+        var airport_id: String = String(layout.get("airport_id", ""))
+        if not db.airports.has(airport_id):
+            errors.append("%s: unknown airport_id '%s'" % [where, airport_id])
+        var runway: Dictionary = layout.get("runway", {})
+        if runway.is_empty():
+            errors.append("%s: layout has no runway" % where)
+        elif float(runway.get("width", 0.0)) <= 0.0:
+            errors.append("%s: runway width must be positive" % where)
+        var stands: Array = layout.get("stands", [])
+        if stands.is_empty():
+            errors.append("%s: layout has no stands, nothing could park" % where)
+        var stand_ids: Dictionary = {}
+        for stand: Variant in stands:
+            var stand_id: String = String((stand as Dictionary).get("id", ""))
+            if stand_id.is_empty():
+                errors.append("%s: a stand is missing its id" % where)
+            elif stand_ids.has(stand_id):
+                errors.append("%s: duplicate stand id '%s'" % [where, stand_id])
+            stand_ids[stand_id] = true
 
 static func _require_band(value: Variant, where: String, key: String, errors: PackedStringArray) -> void:
     var band: int = int(value)

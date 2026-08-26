@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "layouts": [
+    {
+      "id": "layout_bzn",
+      "airport_id": "apt_bzn",
+      "biome": "mountain",
+      "ground_extent": [1500, 900],
+      "runway": {
+        "start": [-620, 150],
+        "end": [620, 150],
+        "width": 44,
+        "designations": ["12", "30"]
+      },
+      "taxiways": [
+        {"id": "twy_a", "points": [[-470, 150], [-470, 20], [-160, 20]]},
+        {"id": "twy_b", "points": [[470, 150], [470, 20], [160, 20]]},
+        {"id": "twy_apron", "points": [[-160, 20], [160, 20]]}
+      ],
+      "apron": {"centre": [0, -40], "size": [420, 140]},
+      "stands": [
+        {"id": "stand_1", "position": [-80, -60], "heading": 90, "size": "small"},
+        {"id": "stand_2", "position": [70, -60], "heading": 90, "size": "small"}
+      ],
+      "buildings": [
+        {"id": "terminal", "type": "terminal", "position": [0, -170], "size": [300, 96], "level": 1},
+        {"id": "tower", "type": "tower", "position": [200, -180], "size": [42, 42], "level": 1},
+        {"id": "fuel", "type": "fuel", "position": [-250, -140], "size": [70, 50], "level": 1}
+      ],
+      "decor": [
+        {"type": "ridge", "position": [-520, -330], "size": [520, 150]},
+        {"type": "ridge", "position": [340, -350], "size": [640, 170]},
+        {"type": "trees", "position": [-560, 330], "size": [300, 90]},
+        {"type": "trees", "position": [430, 340], "size": [360, 90]}
+      ]
+    },
+    {
+      "id": "layout_bil",
+      "airport_id": "apt_bil",
+      "biome": "plains",
+      "ground_extent": [1500, 900],
+      "runway": {
+        "start": [-640, 140],
+        "end": [640, 140],
+        "width": 44,
+        "designations": ["10", "28"]
+      },
+      "taxiways": [
+        {"id": "twy_a", "points": [[-430, 140], [-430, 10], [-140, 10]]},
+        {"id": "twy_b", "points": [[430, 140], [430, 10], [140, 10]]},
+        {"id": "twy_apron", "points": [[-140, 10], [140, 10]]}
+      ],
+      "apron": {"centre": [0, -50], "size": [380, 130]},
+      "stands": [
+        {"id": "stand_1", "position": [-70, -70], "heading": 90, "size": "small"},
+        {"id": "stand_2", "position": [80, -70], "heading": 90, "size": "small"}
+      ],
+      "buildings": [
+        {"id": "terminal", "type": "terminal", "position": [0, -170], "size": [260, 88], "level": 1},
+        {"id": "cargo", "type": "cargo", "position": [-260, -150], "size": [120, 70], "level": 1}
+      ],
+      "decor": [
+        {"type": "fields", "position": [-460, -330], "size": [560, 160]},
+        {"type": "fields", "position": [420, -340], "size": [520, 150]},
+        {"type": "fields", "position": [0, 350], "size": [900, 120]}
+      ]
+    },
+    {
+      "id": "layout_den",
+      "airport_id": "apt_den",
+      "biome": "highplains",
+      "ground_extent": [2000, 1200],
+      "runway": {
+        "start": [-880, 250],
+        "end": [880, 250],
+        "width": 56,
+        "designations": ["17", "35"]
+      },
+      "secondary_runways": [
+        {"start": [-880, -330], "end": [880, -330], "width": 56, "designations": ["16", "34"]}
+      ],
+      "taxiways": [
+        {"id": "twy_a", "points": [[-660, 250], [-660, 90], [-360, 90]]},
+        {"id": "twy_b", "points": [[660, 250], [660, 90], [360, 90]]},
+        {"id": "twy_apron", "points": [[-360, 90], [360, 90]]},
+        {"id": "twy_north", "points": [[-660, -330], [-660, -180], [-360, -180]]},
+        {"id": "twy_north_b", "points": [[660, -330], [660, -180], [360, -180]]}
+      ],
+      "apron": {"centre": [0, -30], "size": [760, 200]},
+      "stands": [
+        {"id": "stand_1", "position": [-300, -60], "heading": 90, "size": "medium"},
+        {"id": "stand_2", "position": [-150, -60], "heading": 90, "size": "medium"},
+        {"id": "stand_3", "position": [0, -60], "heading": 90, "size": "large"},
+        {"id": "stand_4", "position": [150, -60], "heading": 90, "size": "medium"},
+        {"id": "stand_5", "position": [300, -60], "heading": 90, "size": "medium"}
+      ],
+      "buildings": [
+        {"id": "terminal", "type": "terminal", "position": [0, -200], "size": [720, 130], "level": 3},
+        {"id": "tower", "type": "tower", "position": [-420, -230], "size": [54, 54], "level": 2},
+        {"id": "cargo", "type": "cargo", "position": [520, -210], "size": [220, 96], "level": 2}
+      ],
+      "decor": [
+        {"type": "scrub", "position": [-700, 480], "size": [520, 120]},
+        {"type": "scrub", "position": [560, 500], "size": [560, 120]}
+      ]
+    }
+  ]
+}

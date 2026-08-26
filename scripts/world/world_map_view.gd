@@ -1,49 +1,70 @@
 class_name WorldMapView
 extends Node2D
+## Draws the stylized world map as a single LOD texture in world space.
+##
+## Textures come from tools/build_world_geometry.py. Nothing here parses
+## geographic data at runtime. The map repeats horizontally so panning across
+## the International Date Line is continuous.
 
-const GameDB = preload("res://scripts/data/game_db.gd")
-const WorldProjection = preload("res://scripts/world/world_projection.gd")
+const OCEAN_VOID := Color("#0f2435")
 
-const WORLD_SIZE := Vector2(2048.0, 1024.0)
-const OCEAN := Color("#17364a")
-const LAND_PLACEHOLDER := Color("#536c54")
-const ROUTE := Color("#8bc6d9")
-const AIRPORT := Color("#f4e2a1")
-const AIRPORT_MAJOR := Color("#f3ad63")
-
-var db := GameDB.new()
+var _camera: WorldCamera
+var _textures: Dictionary = {}
+var _tier := -1
 
 func _ready() -> void:
-    db.load_all()
+    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    z_index = -100
+
+func bind_camera(camera: WorldCamera) -> void:
+    _camera = camera
+    _camera.view_changed.connect(_on_view_changed)
+    _refresh_tier()
+
+func _on_view_changed() -> void:
+    _refresh_tier()
     queue_redraw()
 
+func _refresh_tier() -> void:
+    if _camera == null:
+        return
+    # Selecting on the lower of current/target zoom keeps a coarser (larger
+    # world_scale) texture on screen mid-animation, so the map is never
+    # downsampled while a zoom is still interpolating.
+    var zoom_for_tier: float = minf(_camera.current_zoom(), _camera.target_zoom())
+    var tier: int = WorldLod.tier_for_zoom(zoom_for_tier)
+    if tier != _tier:
+        _tier = tier
+        _ensure_texture(tier)
+
+func _ensure_texture(tier: int) -> void:
+    if _textures.has(tier):
+        return
+    var path: String = WorldLod.texture_path(tier)
+    if not ResourceLoader.exists(path):
+        push_error("World map texture missing: %s — run tools/build_world_geometry.py" % path)
+        return
+    _textures[tier] = load(path)
+
 func _draw() -> void:
-    draw_rect(Rect2(Vector2.ZERO, WORLD_SIZE), OCEAN)
+    if _camera == null or not _textures.has(_tier):
+        return
+    var texture: Texture2D = _textures[_tier]
+    var size: Vector2 = WorldProjection.WORLD_SIZE
 
-    # Deliberately crude foundation silhouette. Claude should replace this with
-    # preprocessed Natural Earth LOD geometry, not hand-maintain this polygon.
-    var north_america := PackedVector2Array([
-        Vector2(260, 170), Vector2(410, 130), Vector2(560, 170), Vector2(650, 255),
-        Vector2(610, 330), Vector2(540, 390), Vector2(500, 470), Vector2(430, 505),
-        Vector2(360, 450), Vector2(310, 350), Vector2(245, 300)
-    ])
-    draw_colored_polygon(north_america, LAND_PLACEHOLDER)
+    # Fill beyond the poles so panning never reveals the clear colour.
+    var view: Rect2 = _visible_world_rect()
+    draw_rect(Rect2(view.position - Vector2(64, 64), view.size + Vector2(128, 128)), OCEAN_VOID)
 
-    _draw_route("apt_bzn", "apt_bil")
-    _draw_route("apt_bzn", "apt_den")
-    _draw_route("apt_bil", "apt_den")
+    # Draw the copies of the world that intersect the view, giving seamless
+    # horizontal wrap without duplicating any state.
+    var first: int = int(floor((view.position.x) / size.x))
+    var last: int = int(floor((view.position.x + view.size.x) / size.x))
+    for copy in range(first, last + 1):
+        draw_texture_rect(texture, Rect2(Vector2(copy * size.x, 0.0), size), false)
 
-    for airport in db.airports.values():
-        var pos := WorldProjection.lat_lon_to_map(float(airport["lat"]), float(airport["lon"]), WORLD_SIZE)
-        var radius := 8.0 if String(airport["tier"]) == "major" else 6.0
-        var color := AIRPORT_MAJOR if String(airport["tier"]) == "major" else AIRPORT
-        draw_circle(pos, radius, color)
-        draw_circle(pos, radius + 3.0, Color(color, 0.2), false, 2.0)
-        draw_string(ThemeDB.fallback_font, pos + Vector2(10, 5), String(airport["code"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
-
-func _draw_route(a_id: String, b_id: String) -> void:
-    var a: Dictionary = db.airports[a_id]
-    var b: Dictionary = db.airports[b_id]
-    var pa := WorldProjection.lat_lon_to_map(float(a["lat"]), float(a["lon"]), WORLD_SIZE)
-    var pb := WorldProjection.lat_lon_to_map(float(b["lat"]), float(b["lon"]), WORLD_SIZE)
-    draw_dashed_line(pa, pb, ROUTE, 2.0, 8.0, true)
+func _visible_world_rect() -> Rect2:
+    var viewport_size: Vector2 = get_viewport_rect().size
+    var top_left: Vector2 = _camera.screen_to_world(Vector2.ZERO)
+    var bottom_right: Vector2 = _camera.screen_to_world(viewport_size)
+    return Rect2(top_left, bottom_right - top_left)

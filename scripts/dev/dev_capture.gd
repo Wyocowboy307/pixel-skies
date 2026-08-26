@@ -13,6 +13,7 @@ extends Node
 ## is worth reviewing.
 
 const OUT_DIR := "res://.captures"
+const CAPTURE_FPS := 60
 const SCENARIO_DIR := "res://scripts/dev/scenarios/%s.gd"
 
 var active := false
@@ -25,6 +26,10 @@ func _ready() -> void:
     if not active:
         return
     process_mode = Node.PROCESS_MODE_ALWAYS
+    # Pin the frame rate while capturing. Uncapped, the window renders several
+    # hundred frames a second, so a frame count is a meaningless unit of time
+    # and time-based animation has barely started when the shot is taken.
+    Engine.max_fps = CAPTURE_FPS
     _run.call_deferred()
 
 func _parse_user_args() -> Dictionary:
@@ -66,10 +71,16 @@ func _run_scenario(name: String) -> void:
     await runner.run(self)
 
 ## Waits for the game to actually render `frames` frames before capturing, so a
-## capture never lands mid-transition or before a tween settles.
+## capture never lands before the view has responded.
 func settle(frames: int = 2) -> void:
     for _i in range(maxi(1, frames)):
         await get_tree().process_frame
+
+## Waits real seconds. Anything driven by a Tween or a timer needs this rather
+## than a frame count, because those advance on wall-clock delta.
+func wait(seconds: float) -> void:
+    await get_tree().create_timer(seconds).timeout
+    await get_tree().process_frame
 
 func shot(name: String) -> void:
     await RenderingServer.frame_post_draw
