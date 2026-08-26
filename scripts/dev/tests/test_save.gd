@@ -109,3 +109,17 @@ func test_save_version_is_recorded_and_migrated() -> void:
         "save records its schema version")
     var ancient: Dictionary = SaveService.migrate({"save_version": 0})
     check_eq(int(ancient["save_version"]), AirlineState.SAVE_VERSION, "old saves migrate forward")
+
+func test_tests_never_write_the_real_save() -> void:
+    # A test run on a fake clock must not leave the player's save timestamped
+    # months into the future.
+    check(SaveService.active_path() != SaveService.SAVE_PATH,
+        "test run is redirected away from the real save path")
+
+func test_save_redirect_survives_a_script_reload() -> void:
+    # The parse-check test re-compiles every script, which resets static vars.
+    # The redirect has to outlive that, or later tests write the real save.
+    var before: String = SaveService.active_path()
+    (load("res://scripts/sim/save_service.gd") as GDScript).reload()
+    check_eq(SaveService.active_path(), before, "redirect survives a reload")
+    check(before != SaveService.SAVE_PATH, "and is still pointed away from the real save")

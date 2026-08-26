@@ -132,11 +132,26 @@ are drawn on a transparent background.
 ### Aircraft — side view (detail screen)
 The detail view shows one aircraft large against a 640×360 screen.
 
-| tier | canvas |
-| --- | --- |
-| small | 128×48 |
-| medium | 176×64 |
-| large | 240×88 |
+Side profiles are **stylized, not scale**. Real fuselage ratios are 6:1 or
+worse, which at sprite size reads as a technical reference drawing rather than
+as an aircraft the player owns. These are toys: stubby bodies, round noses,
+oversized fins and propellers, fat wheels. Proportions are hand-tuned per family
+in `tools/pixelart/aircraft.py` (`SIDE_STYLES`), and the body ratio itself
+carries the size tier.
+
+Sizes are chosen so the detail view draws them at **1:1**. Scaling a sprite up
+to fill the screen makes its pixels coarser than the UI around it; drawing it
+big natively keeps one pixel density everywhere.
+
+| tier | canvas | body ratio |
+| --- | --- | --- |
+| small | 208×120 | 2.5 : 1 |
+| medium | 264×144 | 2.9 : 1 |
+| large | 320×176 | 3.3 : 1 |
+
+The metric spec still governs the top view. The two views agree on everything
+that carries identity — wing position, engine count and layout, gear type,
+livery — which is what keeps them the same aircraft.
 
 Nose points **east (+x)**. The main gear contact point sits on a consistent
 baseline so every aircraft lines up in the detail view.

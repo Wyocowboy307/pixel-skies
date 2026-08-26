@@ -8,6 +8,7 @@ extends Node2D
 ## (docs/TECH_ARCHITECTURE.md, "Airport movement").
 
 signal aircraft_clicked(aircraft_id: String)
+signal aircraft_activated(aircraft_id: String)
 
 const TILE := 16
 const TILES := "res://assets/art/airports/tiles/%s.png"
@@ -129,10 +130,16 @@ func _unhandled_input(event: InputEvent) -> void:
         return
     var hit: String = aircraft_at_point(get_local_mouse_position())
     if not hit.is_empty():
+        # First click selects, clicking the selected aircraft again opens its
+        # detail view (docs/UI_UX.md, "Plane selection").
+        var repeat: bool = hit == selected_aircraft_id
         selected_aircraft_id = hit
-        aircraft_clicked.emit(hit)
         get_viewport().set_input_as_handled()
         queue_redraw()
+        if repeat:
+            aircraft_activated.emit(hit)
+        else:
+            aircraft_clicked.emit(hit)
 
 ## Deterministic decoration scatter, seeded from the airport id, so a field
 ## looks identical every time it is opened.

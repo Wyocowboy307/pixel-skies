@@ -289,196 +289,394 @@ def _top_trim(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
 # ---------------------------------------------------------------------------
 # Side view
 # ---------------------------------------------------------------------------
+#
+# The side view is deliberately NOT derived from the metric spec the way the top
+# view is. Real fuselage ratios are 6:1 or worse, and at sprite size that reads
+# as a technical reference drawing rather than as an aircraft you own. These are
+# toys: stubby, round-nosed, chunky-tailed, with proportions hand-tuned per
+# family. The metric spec still governs the top view, and the two agree on the
+# things that carry identity — wing position, engine count and layout, gear
+# type, livery — which is what keeps them the same aircraft.
+
+
+@dataclass(frozen=True)
+class SideStyle:
+    """Stylized side-profile proportions, in pixels."""
+
+    canvas: tuple[int, int]
+    body_length: int
+    body_height: int
+    ## Where the round nose begins, as a fraction of length from the tail.
+    nose_start: float
+    ## Where the tail cone begins, as a fraction of length from the tail.
+    tail_end: float
+    ## How much of the body height survives at the very tail. Toy planes keep a
+    ## chunky tail rather than tapering to a needle.
+    tail_keep: float
+    fin_height: int
+    fin_root: int
+    windows: int
+    window_size: int
+    wing_chord: int
+    wing_x: float               # wing leading edge, fraction of length aft of nose
+    gear_height: int
+    wheel_radius: int
+    prop_radius: int
+
+
+SIDE_STYLES: dict[str, SideStyle] = {
+    # Sizes are chosen so the detail view can draw these at 1:1 against a
+    # 640x360 screen. Scaling a sprite up to fill the screen would make its
+    # pixels coarser than the UI around it; drawing it big natively keeps one
+    # pixel density everywhere and leaves room for real detail.
+    #
+    # The body ratio carries the size tier: small is roundest, large longest.
+
+    # Small: roundest and stubbiest — almost an egg with wings. 2.5:1.
+    "trailhopper_4": SideStyle(
+        canvas=(208, 120), body_length=150, body_height=58,
+        nose_start=0.84, tail_end=0.40, tail_keep=0.30,
+        fin_height=38, fin_root=42, windows=3, window_size=12,
+        wing_chord=42, wing_x=0.40, gear_height=18, wheel_radius=9, prop_radius=26,
+    ),
+    # Medium: longer body, same chunk. 2.9:1.
+    "twinwing_8": SideStyle(
+        canvas=(264, 144), body_length=205, body_height=68,
+        nose_start=0.84, tail_end=0.38, tail_keep=0.28,
+        fin_height=46, fin_root=54, windows=5, window_size=12,
+        wing_chord=52, wing_x=0.44, gear_height=20, wheel_radius=10, prop_radius=27,
+    ),
+    # Large: longest and tallest, a proper little airliner. 3.3:1.
+    "highline_19": SideStyle(
+        canvas=(320, 176), body_length=270, body_height=80,
+        nose_start=0.85, tail_end=0.36, tail_keep=0.26,
+        fin_height=58, fin_root=66, windows=8, window_size=14,
+        wing_chord=62, wing_x=0.42, gear_height=24, wheel_radius=12, prop_radius=30,
+    ),
+}
+
+
+def side_style(spec: AircraftSpec) -> SideStyle:
+    return SIDE_STYLES[spec.key]
+
+
+def _capsule(style: SideStyle, body_top: int, belly: int) -> list[tuple[int, int]]:
+    """Top and bottom of the fuselage for each station along its length.
+
+    The nose is a circular bulge rather than a taper — that roundness is most of
+    what makes the aircraft read as a toy instead of a diagram.
+    """
+    profile: list[tuple[int, int]] = []
+    height = float(belly - body_top)
+    for i in range(style.body_length):
+        t = i / float(style.body_length - 1)     # 0 at tail, 1 at nose
+        top = float(body_top)
+        bottom = float(belly)
+        if t >= style.nose_start:
+            run = (t - style.nose_start) / max(1e-6, 1.0 - style.nose_start)
+            # Circular falloff: fat almost all the way forward, then a quick round.
+            drop = (1.0 - math.sqrt(max(0.0, 1.0 - run * run))) * height * 0.5
+            top += drop * 1.05
+            bottom -= drop * 0.62
+        elif t <= style.tail_end:
+            run = 1.0 - t / max(1e-6, style.tail_end)
+            keep = 1.0 - (1.0 - style.tail_keep) * run
+            centre = (body_top + belly) * 0.5 - height * 0.16 * run
+            top = centre - height * keep * 0.5
+            bottom = centre + height * keep * 0.5
+        profile.append((int(round(top)), int(round(bottom))))
+    return profile
+
 
 def build_side(spec: AircraftSpec) -> Canvas:
-    width, height = spec.canvas_side
+    style = side_style(spec)
+    width, height = style.canvas
     canvas = Canvas(width, height)
     livery = _livery(spec.livery)
 
-    total_height_m = spec.gear_height_m + spec.fuselage_height_m + spec.fin_height_m
-    ppm = min((width - 8) / spec.length_m, (height - 6) / total_height_m)
+    baseline = height - 2
+    belly = baseline - style.gear_height
+    body_top = belly - style.body_height
+    nose = (width + style.body_length) // 2 - 1
+    tail = nose - style.body_length + 1
+    profile = _capsule(style, body_top, belly)
 
-    length = round(spec.length_m * ppm)
-    nose = (width + length) // 2 - 1
-    tail = nose - length
-    # A shared baseline means every aircraft lines up in the detail view.
-    baseline = height - 3
-    belly = baseline - round(spec.gear_height_m * ppm)
-    body_h = max(4, round(spec.fuselage_height_m * ppm))
-    body_top = belly - body_h
-
-    ctx = dict(ppm=ppm, nose=nose, tail=tail, length=length, baseline=baseline,
-               belly=belly, body_top=body_top, body_h=body_h, livery=livery)
+    ctx = dict(style=style, livery=livery, nose=nose, tail=tail, belly=belly,
+               body_top=body_top, baseline=baseline, profile=profile)
 
     _side_tail(canvas, spec, ctx)
-    _side_fuselage(canvas, spec, ctx)
-    _side_wing(canvas, spec, ctx)
-    _side_engines(canvas, spec, ctx)
+    if not spec.high_wing:
+        _side_wing(canvas, spec, ctx)
+    _side_body(canvas, spec, ctx)
+    if spec.high_wing:
+        _side_wing(canvas, spec, ctx)
     _side_glass(canvas, spec, ctx)
+    _side_engines(canvas, spec, ctx)
     _side_gear(canvas, spec, ctx)
     canvas.outline()
     return canvas
 
 
-def _side_fuselage(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
+def _station(ctx: dict, x: int) -> tuple[int, int]:
+    """Fuselage top and bottom at screen station `x`.
+
+    The profile is built tail-to-nose (index 0 is the tail), so it is indexed
+    from the tail — indexing it from the nose puts the round nose on the tail.
+    """
+    profile: list = ctx["profile"]
+    index = max(0, min(len(profile) - 1, x - ctx["tail"]))
+    return profile[index]
+
+
+def _side_body(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
     livery = ctx["livery"]
-    nose, tail, length = ctx["nose"], ctx["tail"], ctx["length"]
-    body_top, belly, body_h = ctx["body_top"], ctx["belly"], ctx["body_h"]
-    nose_run = max(3, int(length * 0.14))
-    boom_start = int(length * 0.58)
+    style: SideStyle = ctx["style"]
+    nose, tail = ctx["nose"], ctx["tail"]
     for x in range(tail, nose + 1):
-        back = nose - x
-        if back < nose_run:
-            t = back / nose_run
-            top = body_top + round((1.0 - t) * body_h * 0.42)
-            bottom = belly - round((1.0 - t) * body_h * 0.26)
-        elif back > boom_start:
-            run = (back - boom_start) / max(1, length - boom_start)
-            top = body_top + round(run * body_h * 0.34)
-            # The underside sweeps up toward the tail, which is what gives an
-            # aeroplane its recognisable side profile.
-            bottom = belly - round(run * body_h * 0.62)
-        else:
-            top, bottom = body_top, belly
-        if bottom < top:
-            bottom = top
+        top, bottom = _station(ctx, x)
         for y in range(top, bottom + 1):
             offset = y - (top + bottom) // 2
             half = max(1, (bottom - top) // 2)
             canvas.plot(x, y, _shade(offset, half, livery["light"], livery["base"], livery["dark"]))
+    # A bold stripe along the flank: the airline's colour, and the detail that
+    # stops the fuselage reading as a blank capsule.
+    stripe_y = ctx["body_top"] + int(round(style.body_height * 0.55))
+    thickness = max(1, style.body_height // 22)
+    for x in range(tail + 2, nose - 2):
+        top, bottom = _station(ctx, x)
+        y = min(max(stripe_y, top + 2), bottom - 3)
+        for dy in range(thickness):
+            canvas.plot(x, y + dy, livery["trim"])
+    _side_door(canvas, spec, ctx)
+
+
+def _side_door(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
+    """A passenger door, and a cargo door on anything that carries freight.
+
+    At this sprite size the flank is the largest flat area on the aircraft;
+    a door is what gives it scale and tells you people get in there.
+    """
+    livery = ctx["livery"]
+    style: SideStyle = ctx["style"]
+    nose = ctx["nose"]
+    door_h = max(6, int(round(style.body_height * 0.52)))
+    door_w = max(4, int(round(style.body_length * 0.055)))
+    x0 = nose - int(round(style.body_length * 0.34))
+    top, bottom = _station(ctx, x0)
+    y0 = ctx["body_top"] + int(round(style.body_height * 0.22))
+    y0 = min(y0, bottom - door_h - 1)
+    canvas.rect_outline(x0 - door_w, y0, door_w, door_h, livery["dark"])
+    canvas.vline(x0 - door_w, y0 + 1, y0 + door_h - 2, livery["light"])
+    # Handle.
+    canvas.plot(x0 - 2, y0 + door_h // 2, "metal_dark")
+
+    if spec.cabin_windows >= 4:
+        cargo_w = max(6, int(round(style.body_length * 0.10)))
+        cx = nose - int(round(style.body_length * 0.62))
+        c_top, c_bottom = _station(ctx, cx)
+        cy = ctx["body_top"] + int(round(style.body_height * 0.34))
+        cy = min(cy, c_bottom - door_h)
+        canvas.rect_outline(cx - cargo_w, cy, cargo_w, max(5, door_h - 3), livery["dark"])
 
 
 def _side_wing(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
-    """Edge-on, a wing is a thin tapered blade — its height on the fuselage is
-    what tells a high wing from a low one."""
+    """Edge-on the wing is a thick chunky blade. Its height on the fuselage is
+    what tells a high wing from a low one, and it matches the top view."""
     livery = ctx["livery"]
-    ppm, nose = ctx["ppm"], ctx["nose"]
-    chord = max(4, round(spec.wing_chord_m * ppm))
-    leading = nose - round(spec.length_m * spec.wing_x_frac * ppm)
-    thickness = max(2, round(spec.wing_chord_m * ppm * 0.11))
-    # A high wing is mounted on top of the fuselage, so its blade must be drawn
-    # above the roof line. Drawn at the roof line it is simply invisible, which
-    # is what made the first pass read as a boat hull.
-    y = ctx["body_top"] - thickness + 1 if spec.high_wing else ctx["belly"] - thickness - 1
+    style: SideStyle = ctx["style"]
+    leading = ctx["nose"] - int(round(style.body_length * style.wing_x))
+    chord = style.wing_chord
+    thickness = max(3, style.body_height // 6)
+    y = ctx["body_top"] - thickness + 2 if spec.high_wing else ctx["belly"] - thickness - 1
     for x in range(leading - chord, leading + 1):
         run = (leading - x) / max(1, chord)
-        t = thickness if run < 0.55 else max(1, thickness - 1)
-        for dy in range(t):
-            canvas.plot(x, y + dy, livery["light"] if dy == 0 else livery["base"])
-    if spec.struts and spec.high_wing:
-        canvas.line(leading - chord + 1, y + thickness,
-                    leading - chord - max(3, chord // 2), ctx["belly"] - 2, "metal_dark")
+        rows = thickness if run < 0.6 else max(2, thickness - 1)
+        for dy in range(rows):
+            colour = livery["light"] if dy == 0 else (
+                livery["dark"] if dy == rows - 1 else livery["base"])
+            canvas.plot(x, y + dy, colour)
+    # No dark run under the wing root: against the fuselage it reads as a gap
+    # between the two rather than as a join.
+    # No wing strut in side view: at this stylization a diagonal line across the
+    # flank reads as a scratch, and the high wing is already legible from the
+    # blade sitting on the roof.
 
 
 def _side_tail(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
+    """A tall fin that grows out of the tail cone.
+
+    The fin's leading edge is the one nearest the nose and sweeps up and back;
+    the trailing edge is vertical at the very tail. Drawn as a plain slab it
+    reads as a sail stuck on the back, so the top is narrowed and rounded.
+    """
     livery = ctx["livery"]
-    ppm, tail, body_top = ctx["ppm"], ctx["tail"], ctx["body_top"]
-    fin_h = max(4, round(spec.fin_height_m * ppm))
-    root = max(4, round(spec.tail_chord_m * ppm * 1.35))
-    top_y = body_top - fin_h
-    # Swept fin: leading edge rakes back, trailing edge is vertical at the tail.
+    style: SideStyle = ctx["style"]
+    tail = ctx["tail"]
+    body_top = ctx["body_top"]
+    root = style.fin_root
+    top_y = body_top - style.fin_height
+
     for x in range(tail, tail + root + 1):
-        run = (x - tail) / max(1, root)
-        y_top = round(top_y + (1.0 - run) * fin_h * 0.0 + run * 0.0)
-        y_top = top_y if run > 0.45 else round(body_top - fin_h * (run / 0.45))
-        for y in range(y_top, body_top + 1):
-            canvas.plot(x, y, livery["light"] if y <= y_top + 1 else livery["base"])
-    # Tailplane, edge-on, at the base of the fin.
-    plane_len = max(3, round(spec.tail_chord_m * ppm * 1.9))
-    for x in range(tail + 1, tail + plane_len):
-        canvas.plot(x, body_top + 1, livery["base"])
-        canvas.plot(x, body_top + 2, livery["dark"])
-    # Trim flash on the fin: the airline's identity mark.
-    for x in range(tail + 1, tail + root):
-        run = (x - tail) / max(1, root)
-        y = round(top_y + fin_h * 0.30 + run * fin_h * 0.30)
+        # 0 at the leading edge (nearest the nose), 1 at the trailing edge.
+        run = (tail + root - x) / float(max(1, root))
+        rise = min(1.0, run / 0.72)
+        y_top = int(round(body_top - style.fin_height * rise))
+        # Round the very top of the fin over the last couple of columns.
+        if run > 0.86:
+            y_top += int(round((run - 0.86) / 0.14 * 2.0))
+        _, bottom = _station(ctx, min(x, ctx["nose"]))
+        y_bottom = min(body_top + 3, bottom)
+        for y in range(y_top, y_bottom + 1):
+            colour = livery["light"] if y <= y_top + 1 else livery["base"]
+            canvas.plot(x, y, colour)
+
+    # Livery flash across the fin, following its sweep.
+    for x in range(tail + 1, tail + root - 1):
+        run = (tail + root - x) / float(max(1, root))
+        rise = min(1.0, run / 0.72)
+        y = int(round(body_top - style.fin_height * rise * 0.58))
         canvas.plot(x, y, livery["trim"])
+        canvas.plot(x, y + 1, livery["trim"])
 
-
-def _side_engines(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
-    ppm, nose = ctx["ppm"], ctx["nose"]
-    prop_half = max(4, round(spec.prop_diameter_m * ppm * 0.5))
-    if spec.wing_engines:
-        chord = max(4, round(spec.wing_chord_m * ppm))
-        leading = nose - round(spec.length_m * spec.wing_x_frac * ppm)
-        centre = (ctx["body_top"] if spec.high_wing else ctx["belly"] - 2)
-        centre += 1 if spec.high_wing else -1
-        half = max(1, round(spec.fuselage_height_m * ppm * 0.15))
-        front = leading + round(chord * 0.55)
-        for x in range(leading - round(chord * 0.7), front + 1):
-            for dy in range(-half, half + 1):
-                canvas.plot(x, centre + dy,
-                            _shade(dy, half, "metal_light", "metal", "metal_dark"))
-        _side_prop(canvas, front + 2, centre, prop_half)
-    else:
-        cowl = max(3, round(ctx["length"] * 0.11))
-        for x in range(nose - cowl, nose + 1):
-            back = nose - x
-            t = back / cowl
-            top = ctx["body_top"] + round((1.0 - t) * ctx["body_h"] * 0.28)
-            bottom = ctx["belly"] - round((1.0 - t) * ctx["body_h"] * 0.28)
-            for y in range(top, bottom + 1):
-                offset = y - (top + bottom) // 2
-                canvas.plot(x, y, _shade(offset, max(1, (bottom - top) // 2),
-                                         "metal_light", "metal", "metal_dark"))
-        _side_prop(canvas, nose + 2, (ctx["body_top"] + ctx["belly"]) // 2, prop_half)
-
-
-def _side_prop(canvas: Canvas, x: int, centre_y: int, half: int) -> None:
-    canvas.vline(x, centre_y - half, centre_y + half, "metal_dark")
-    canvas.plot(x, centre_y, "metal_light")
+    # Tailplane, edge-on and chunky, sitting at the base of the fin.
+    plane_len = max(6, root - 3)
+    for x in range(tail + 1, tail + plane_len):
+        canvas.plot(x, body_top + 1, livery["light"])
+        canvas.plot(x, body_top + 2, livery["base"])
+        canvas.plot(x, body_top + 3, livery["dark"])
 
 
 def _side_glass(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
-    nose, tail, length = ctx["nose"], ctx["tail"], ctx["length"]
-    body_top = ctx["body_top"]
-    # Raked windscreen.
-    screen = nose - max(3, int(length * 0.13))
-    for i in range(max(2, int(length * 0.045))):
-        canvas.vline(screen - i, body_top + 2, body_top + 3 + i // 2, "glass_light")
-    # Cabin windows, evenly spaced back along the fuselage.
-    y = body_top + max(2, ctx["body_h"] // 4)
-    start = screen - max(4, int(length * 0.07))
-    step = max(3, int(length * 0.055))
-    size = max(2, int(length * 0.022))
-    for i in range(spec.cabin_windows):
+    """A wrapped windscreen at the very front and a row of chunky portholes.
+
+    The screen hugs the nose curve rather than sitting back on the flank as a
+    rectangle — set back it reads as one more window and leaves a long blank
+    snout, which is what made the first pass look like a bus.
+    """
+    style: SideStyle = ctx["style"]
+    nose, tail = ctx["nose"], ctx["tail"]
+    screen_back = nose - int(round(style.body_length * 0.30))
+    screen_front = nose - int(round(style.body_length * 0.05))
+    span = max(1, screen_front - screen_back)
+    tall = max(4, int(round(style.body_height * 0.42)))
+
+    for x in range(screen_back, screen_front + 1):
+        run = (x - screen_back) / float(span)
+        top, bottom = _station(ctx, x)
+        # Follows the roof down over the nose, shrinking as it wraps forward.
+        y0 = top + 2
+        rows = max(2, int(round(tall * (1.0 - run * 0.62))))
+        rows = min(rows, max(2, bottom - y0 - 2))
+        for dy in range(rows):
+            if dy == 0:
+                colour = "glass_light"
+            elif dy == rows - 1 and run < 0.5:
+                colour = "metal_dark"      # lower frame, only where it is upright
+            else:
+                colour = "glass"
+            canvas.plot(x, y0 + dy, colour)
+    # Windscreen post at the back edge, which reads as a cockpit frame.
+    post_top, _ = _station(ctx, screen_back)
+    canvas.vline(screen_back - 1, post_top + 2, post_top + 2 + tall, "metal_dark")
+
+    size = style.window_size
+    y = ctx["body_top"] + max(3, int(round(style.body_height * 0.32)))
+    start = screen_back - 4
+    step = size + max(2, size // 2)
+    for i in range(style.windows):
         x = start - i * step
-        if x - size <= tail + max(4, int(length * 0.10)):
+        if x - size <= tail + max(5, style.fin_root // 2):
             break
-        canvas.rect(x - size, y, size, size, "glass")
-        canvas.hline(x - size, x - 1, y, "glass_light")
+        canvas.rect(x - size + 1, y, size - 1, size - 2, "glass")
+        canvas.hline(x - size + 1, x - 1, y, "glass_light")
+
+
+def _side_engines(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
+    style: SideStyle = ctx["style"]
+    nose = ctx["nose"]
+    if spec.wing_engines:
+        leading = nose - int(round(style.body_length * style.wing_x))
+        chord = style.wing_chord
+        # The nacelle hangs clear of the fuselage and reaches forward of the
+        # wing, so its propeller turns against the background. Sitting flush on
+        # the wing line the prop is drawn straight over the body and vanishes.
+        wing_thickness = max(3, style.body_height // 6)
+        centre = (ctx["body_top"] - wing_thickness // 2 if spec.high_wing
+                  else ctx["belly"] - wing_thickness // 2 - 1)
+        half = max(3, style.body_height // 7)
+        back = leading - int(round(chord * 0.30))
+        front = leading + int(round(chord * 0.62))
+        for x in range(back, front + 1):
+            run = (front - x) / float(max(1, front - back))
+            rows = half if run > 0.16 else max(1, half - 1)     # rounded front
+            for dy in range(-rows, rows + 1):
+                canvas.plot(x, centre + dy,
+                            _shade(dy, rows, "metal_light", "metal", "metal_dark"))
+        _side_prop(canvas, front + 3, centre, max(6, int(round(style.prop_radius * 0.70))))
+    else:
+        # Nose spinner sitting on the round cowl.
+        top, bottom = _station(ctx, nose)
+        centre = (top + bottom) // 2
+        for x in range(nose - 3, nose + 1):
+            t, b = _station(ctx, x)
+            for y in range(t, b + 1):
+                offset = y - (t + b) // 2
+                canvas.plot(x, y, _shade(offset, max(1, (b - t) // 2),
+                                         "metal_light", "metal", "metal_dark"))
+        _side_prop(canvas, nose + 2, centre, style.prop_radius)
+
+
+def _side_prop(canvas: Canvas, x: int, centre_y: int, radius: int) -> None:
+    """A big chunky blade with a bright spinner.
+
+    Blade and hub scale with the radius — a fixed one-pixel blade simply
+    disappears on a 320px airframe.
+    """
+    blade = max(3, radius // 4)
+    hub = max(3, radius // 3)
+    for dy in range(-radius, radius + 1):
+        t = abs(dy) / float(max(1, radius))
+        # Tapers toward the tips so it reads as a blade, not a bar.
+        width = blade if t < 0.55 else max(1, blade - 1)
+        for dx in range(width):
+            canvas.plot(x - dx, centre_y + dy, "metal_light" if dy < 0 else "metal_dark")
+    # Spinner: a solid cone at the hub, which is what makes the blade read as a
+    # propeller rather than as a bar drawn across the nose.
+    canvas.ellipse(x - blade // 2, centre_y, hub * 0.85, hub, "metal")
+    canvas.ellipse(x - blade // 2 - 1, centre_y - hub // 3, hub * 0.45, hub * 0.45, "metal_light")
+    canvas.ellipse(x - blade // 2, centre_y + hub // 2, hub * 0.5, hub * 0.4, "metal_dark")
 
 
 def _side_gear(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
-    nose, tail, length = ctx["nose"], ctx["tail"], ctx["length"]
-    belly, baseline, ppm = ctx["belly"], ctx["baseline"], ctx["ppm"]
-    wheel = max(1.5, spec.gear_height_m * ppm * 0.34)
-    main_x = nose - round(length * (spec.wing_x_frac + 0.10))
-    _leg(canvas, main_x, _underside(canvas, main_x, belly), baseline, wheel)
+    """Short fat legs and big fat wheels: toy running gear, not scale gear."""
+    style: SideStyle = ctx["style"]
+    nose, tail = ctx["nose"], ctx["tail"]
+    baseline = ctx["baseline"]
+    main_x = nose - int(round(style.body_length * (style.wing_x + 0.08)))
+    _leg(canvas, main_x, _underside(canvas, main_x, ctx["belly"]), baseline, style.wheel_radius)
     if spec.gear == "taildragger":
-        tail_x = tail + max(3, round(length * 0.06))
-        # The tail wheel hangs off the tail cone, which has already swept up, so
-        # its leg must start at the actual underside at that station.
-        _leg(canvas, tail_x, _underside(canvas, tail_x, belly),
-             baseline - max(1, int(wheel)), wheel * 0.6)
+        tail_x = tail + max(3, style.fin_root // 3)
+        _leg(canvas, tail_x, _underside(canvas, tail_x, ctx["belly"]),
+             baseline - style.wheel_radius, max(2, style.wheel_radius - 2))
     else:
-        nose_x = nose - round(length * 0.13)
-        _leg(canvas, nose_x, _underside(canvas, nose_x, belly), baseline, wheel * 0.85)
+        nose_x = nose - int(round(style.body_length * 0.14))
+        _leg(canvas, nose_x, _underside(canvas, nose_x, ctx["belly"]), baseline,
+             max(2, style.wheel_radius - 1))
 
 
 def _underside(canvas: Canvas, x: int, fallback: int) -> int:
-    """Lowest opaque pixel of the airframe at station `x`."""
     for y in range(canvas.height - 1, -1, -1):
         if canvas.is_opaque(x, y):
             return y
     return fallback
 
 
-def _leg(canvas: Canvas, x: int, top: int, ground: int, wheel: float) -> None:
-    radius = max(1.0, wheel)
-    canvas.vline(x, top, round(ground - radius), "metal_dark")
-    canvas.disc(x, ground - radius, radius, "asphalt_dark")
-    canvas.plot(x, round(ground - radius), "metal")
+def _leg(canvas: Canvas, x: int, top: int, ground: int, radius: int) -> None:
+    centre_y = ground - radius
+    canvas.rect(x - 1, top, 3, max(1, centre_y - top), "metal_dark")
+    canvas.disc(x, centre_y, radius + 0.4, "asphalt_dark")
+    canvas.disc(x, centre_y, max(1.0, radius - 1.6), "metal_dark")
+    canvas.plot(x, centre_y, "metal_light")
 
 
 # ---------------------------------------------------------------------------

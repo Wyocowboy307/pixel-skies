@@ -48,6 +48,50 @@ static func kind_icon(kind: String) -> String:
         "contract": return "contract"
         _: return "cargo"
 
+## The aircraft's own map sprite, cropped to its first heading — a badge that
+## says which plane rather than a generic icon.
+static func aircraft_badge(family_id: String) -> TextureRect:
+    var node := TextureRect.new()
+    var strip: Texture2D = AircraftSprites.map_strip(family_id)
+    if strip != null:
+        var frame: float = strip.get_size().y
+        var atlas := AtlasTexture.new()
+        atlas.atlas = strip
+        atlas.region = Rect2(0.0, 0.0, frame, frame)
+        node.texture = atlas
+        node.custom_minimum_size = Vector2(frame, frame)
+    node.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+    node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    return node
+
+## A single passenger or crate, used to show capacity as things rather than pips.
+static func payload_pip(is_seat: bool, filled: bool, variant: int = 0) -> Control:
+    if not filled:
+        var empty := ColorRect.new()
+        empty.custom_minimum_size = Vector2(7.0, 9.0) if is_seat else Vector2(9.0, 9.0)
+        empty.color = colour("ui_bg")
+        return empty
+    var node := TextureRect.new()
+    var path: String = "res://assets/art/people/traveller_teal.png" if is_seat \
+        else "res://assets/art/cargo/crate_box.png"
+    if is_seat:
+        var shirts: Array[String] = ["teal", "orange", "green", "red", "grey"]
+        path = "res://assets/art/people/traveller_%s.png" % shirts[variant % shirts.size()]
+    if ResourceLoader.exists(path):
+        node.texture = load(path)
+    node.custom_minimum_size = Vector2(8.0, 12.0) if is_seat else Vector2(12.0, 12.0)
+    node.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+    node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    return node
+
+## Plain-language job description: "2 PEOPLE" rather than "2 PASSENGERS".
+static func job_summary(job: Job) -> String:
+    if job.kind == "passenger":
+        return "%d PERSON" % job.seats if job.seats == 1 else "%d PEOPLE" % job.seats
+    if job.cargo_units == 1:
+        return "1 CRATE"
+    return "%d CRATES" % job.cargo_units
+
 static func kind_colour(kind: String) -> Color:
     match kind:
         "passenger": return colour("accent_teal")

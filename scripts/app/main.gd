@@ -16,13 +16,16 @@ const AIRPORT_CAMERA_ZOOM := 1.0
 var db := GameDB.new()
 var sim: Simulation
 
-enum View { WORLD, AIRPORT }
+enum View { WORLD, AIRPORT, AIRCRAFT }
 
 var _view: View = View.WORLD
 var _transition: ViewTransition
 var _airport_view: AirportView
 var _airport_camera: AirportCamera
 var _airport_hud: AirportHud
+var _detail_view: AircraftDetailView
+## The view to return to when the aircraft detail screen closes.
+var _detail_return: View = View.WORLD
 var _busy := false
 ## Where the world camera was before diving into an airport, so backing out
 ## restores the exact view the player left.
@@ -58,6 +61,7 @@ func _ready() -> void:
     _overlay.airport_activated.connect(_on_airport_activated)
     _overlay.background_clicked.connect(_on_background_clicked)
     _overlay.aircraft_clicked.connect(_on_aircraft_clicked)
+    _overlay.aircraft_activated.connect(open_aircraft_detail)
     _hud.focus_requested.connect(_on_airport_activated)
     _hud.home_requested.connect(_on_home_requested)
     _camera.view_changed.connect(_update_zoom_readout)
@@ -173,6 +177,7 @@ func enter_airport(airport_id: String) -> void:
     _airport_hud.bind(sim, airport_id)
     _airport_hud.dispatch_completed.connect(_on_dispatch_completed)
     _airport_view.aircraft_clicked.connect(_airport_hud.select_aircraft)
+    _airport_view.aircraft_activated.connect(open_aircraft_detail)
     if not _airport_hud.selected_aircraft_id.is_empty():
         _airport_view.selected_aircraft_id = _airport_hud.selected_aircraft_id
 
@@ -215,10 +220,80 @@ func _on_dispatch_completed(flight_id: String) -> void:
         _followed_aircraft_id = leg.aircraft_id
         _overlay.selected_aircraft_id = leg.aircraft_id
 
+# ---------------------------------------------------------------------------
+# Aircraft detail
+# ---------------------------------------------------------------------------
+
+## Opens the plane detail screen over whichever view the player was in, and
+## returns to exactly that view on close.
+func open_aircraft_detail(aircraft_id: String) -> void:
+    if _busy or _view == View.AIRCRAFT:
+        return
+    if not sim.state.aircraft.has(aircraft_id):
+        return
+    _detail_return = _view
+    _detail_view = AircraftDetailView.new()
+    $UI.add_child(_detail_view)
+    _detail_view.bind(sim, aircraft_id)
+    _detail_view.closed.connect(close_aircraft_detail)
+    _detail_view.load_requested.connect(_on_detail_load)
+    _detail_view.route_requested.connect(_on_detail_route)
+    _detail_view.depart_requested.connect(_on_detail_depart)
+    _hud.visible = false
+    if _airport_hud != null:
+        _airport_hud.visible = false
+    _overlay.visible = false
+    _view = View.AIRCRAFT
+
+func close_aircraft_detail() -> void:
+    if _view != View.AIRCRAFT:
+        return
+    if _detail_view != null:
+        _detail_view.queue_free()
+        _detail_view = null
+    _hud.visible = true
+    _view = _detail_return
+    if _view == View.AIRPORT and _airport_hud != null:
+        _airport_hud.visible = true
+        _airport_hud.refresh()
+    elif _view == View.WORLD:
+        _overlay.visible = true
+
+## Load and Route only mean something at an airport, so they take the player
+## there rather than failing silently on the detail screen.
+func _on_detail_load() -> void:
+    var aircraft_id: String = _detail_view.aircraft_id
+    var plane: AircraftInstance = sim.state.aircraft.get(aircraft_id, null)
+    close_aircraft_detail()
+    if plane != null and not plane.location_id.is_empty() and _view != View.AIRPORT:
+        enter_airport(plane.location_id)
+    if _airport_hud != null:
+        _airport_hud.select_aircraft(aircraft_id)
+
+func _on_detail_route() -> void:
+    var aircraft_id: String = _detail_view.aircraft_id
+    _on_detail_load()
+    await get_tree().process_frame
+    if _airport_hud != null:
+        _airport_hud.select_aircraft(aircraft_id)
+        _airport_hud.routing = true
+        _airport_hud.refresh()
+
+func _on_detail_depart() -> void:
+    var aircraft_id: String = _detail_view.aircraft_id
+    if _airport_hud != null and not _airport_hud.selected_destination.is_empty():
+        sim.dispatch(aircraft_id, _airport_hud.selected_destination)
+        close_aircraft_detail()
+        return
+    _on_detail_route()
+
 func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):
         return
     get_viewport().set_input_as_handled()
+    if _view == View.AIRCRAFT:
+        close_aircraft_detail()
+        return
     if _view == View.AIRPORT:
         exit_airport()
         return

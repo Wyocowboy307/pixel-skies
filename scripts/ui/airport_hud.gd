@@ -21,6 +21,7 @@ var _job_header: Label
 var _dock: PanelContainer
 var _dock_title: Label
 var _dock_subtitle: Label
+var _badge_slot: HBoxContainer
 var _config_button: Button
 var _seat_row: HBoxContainer
 var _hold_row: HBoxContainer
@@ -113,6 +114,9 @@ func _build_dock() -> void:
     var identity := HBoxContainer.new()
     identity.add_theme_constant_override("separation", 5)
     column.add_child(identity)
+    _badge_slot = HBoxContainer.new()
+    _badge_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    identity.add_child(_badge_slot)
     _dock_title = UiTheme.label("", "accent_orange")
     identity.add_child(_dock_title)
     _dock_subtitle = UiTheme.label("", "text_dim")
@@ -185,6 +189,7 @@ func _build_route_panel() -> void:
 func _row(height: float) -> Dictionary:
     var button := Button.new()
     button.custom_minimum_size = Vector2(0.0, height)
+    button.clip_contents = true
     var row := HBoxContainer.new()
     row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     row.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -234,13 +239,29 @@ func _job_row(job: Job) -> Control:
     row.add_child(middle)
 
     var destination: Dictionary = sim.db.airports.get(job.destination_id, {})
-    middle.add_child(UiTheme.label("%s %s" % [String(destination.get("code", "?")), job.describe()],
-        "text" if allowed else "text_dim"))
+    var headline := HBoxContainer.new()
+    headline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    headline.add_theme_constant_override("separation", 3)
+    middle.add_child(headline)
+    headline.add_child(UiTheme.label(UiTheme.job_summary(job), "text" if allowed else "text_dim"))
+    headline.add_child(UiTheme.label("TO", "text_dim"))
+    headline.add_child(UiTheme.label(String(destination.get("code", "?")),
+        "accent_orange" if allowed else "text_dim"))
+
+    var footer := HBoxContainer.new()
+    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    footer.add_theme_constant_override("separation", 3)
+    middle.add_child(footer)
     # A refused job explains itself in place rather than failing silently.
     if allowed:
-        middle.add_child(UiTheme.label(UiTheme.money(job.reward), "accent_green"))
+        footer.add_child(UiTheme.icon("money"))
+        footer.add_child(UiTheme.label(UiTheme.money(job.reward), "accent_green"))
+        var spacer := Control.new()
+        spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        footer.add_child(spacer)
+        footer.add_child(UiTheme.label(UiTheme.duration(job.seconds_remaining(sim.now())), "text_dim"))
     else:
-        middle.add_child(UiTheme.label(String(verdict["reason"]), "accent_red"))
+        footer.add_child(UiTheme.label(String(verdict["reason"]), "accent_red"))
     return button
 
 func _load_verdict(job: Job) -> Dictionary:
@@ -262,11 +283,12 @@ func _refresh_dock() -> void:
         return
     _dock.visible = true
     var family: Dictionary = sim.db.aircraft.get(plane.family_id, {})
+    for child: Node in _badge_slot.get_children():
+        child.queue_free()
+    _badge_slot.add_child(UiTheme.aircraft_badge(plane.family_id))
     _dock_title.text = plane.display_name().to_upper()
-    _dock_subtitle.text = "%s · %s · %dNM · %s RWY" % [
-        String(family.get("name", "")), plane.registration,
-        int(family.get("range_nm", 0)),
-        Rules.band_name(int(family.get("runway_band_required", 1))).to_upper()]
+    _dock_subtitle.text = "%s · FLIES UP TO %d NM" % [
+        String(family.get("name", "")).to_upper(), int(family.get("range_nm", 0))]
     _config_button.text = _configuration_name(family, plane.configuration).to_upper()
 
     var limits: Dictionary = Rules.capacity(family, plane.configuration)
@@ -278,7 +300,8 @@ func _refresh_dock() -> void:
     for child: Node in _manifest.get_children():
         child.queue_free()
     if loaded.is_empty():
-        _manifest.add_child(UiTheme.label("EMPTY — LOAD A JOB", "text_dim"))
+        _manifest.add_child(UiTheme.label("NOTHING ABOARD YET", "text_dim"))
+        _manifest.add_child(UiTheme.label("PICK A JOB ON THE LEFT →", "accent_teal"))
     else:
         for job: Job in loaded:
             _manifest.add_child(_manifest_row(job))
@@ -318,11 +341,9 @@ func _fill_slots(row: HBoxContainer, used: int, total: int, colour_key: String) 
     if total <= 0:
         row.add_child(UiTheme.label("—", "text_dim"))
         return
+    var is_seat: bool = colour_key == "accent_teal"
     for i in range(total):
-        var pip := ColorRect.new()
-        pip.custom_minimum_size = Vector2(5.0, 7.0)
-        pip.color = UiTheme.colour(colour_key if i < used else "ui_bg_light")
-        row.add_child(pip)
+        row.add_child(UiTheme.payload_pip(is_seat, i < used, i))
 
 func _manifest_row(job: Job) -> Control:
     var parts: Dictionary = _row(11.0)
@@ -397,7 +418,7 @@ func _route_row(destination_id: String) -> Control:
 
 func _update_preview() -> void:
     if selected_destination.is_empty():
-        _preview.text = "PICK A DESTINATION"
+        _preview.text = "WHERE TO? →"
         _dispatch_button.disabled = true
         return
     var verdict: Dictionary = sim.dispatch_check(selected_aircraft_id, selected_destination)

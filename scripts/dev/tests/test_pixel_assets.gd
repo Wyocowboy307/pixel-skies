@@ -95,9 +95,9 @@ func test_sprites_have_hard_edges() -> void:
 func test_aircraft_sprites_match_their_declared_canvas() -> void:
     # Sizes come from the style guide's canvas ladder, keyed by family.
     var expected: Dictionary = {
-        "trailhopper_4": {"top": Vector2i(48, 48), "side": Vector2i(128, 48)},
-        "twinwing_8": {"top": Vector2i(64, 64), "side": Vector2i(176, 64)},
-        "highline_19": {"top": Vector2i(96, 96), "side": Vector2i(240, 88)},
+        "trailhopper_4": {"top": Vector2i(48, 48), "side": Vector2i(208, 120)},
+        "twinwing_8": {"top": Vector2i(64, 64), "side": Vector2i(264, 144)},
+        "highline_19": {"top": Vector2i(96, 96), "side": Vector2i(320, 176)},
     }
     for key: String in expected:
         var sizes: Dictionary = expected[key]

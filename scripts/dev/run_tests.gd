@@ -7,7 +7,13 @@ extends SceneTree
 
 const TEST_DIR := "res://scripts/dev/tests"
 
+const TEST_SAVE := "user://pixel_skies_test_save.json"
+
 func _init() -> void:
+    # Tests run on a fake clock. Pointed at the real save path they leave the
+    # game loading state timestamped months in the future, so they get their own
+    # file and delete it when the run finishes.
+    SaveService.use_path(TEST_SAVE)
     var files: PackedStringArray = _discover()
     var total_checks := 0
     var failed_tests := 0
@@ -32,6 +38,7 @@ func _init() -> void:
 
     for line: String in report:
         print(line)
+    SaveService.delete_save()
     print("Pixel Skies tests: %d tests, %d checks, %d failed." % [run_tests, total_checks, failed_tests])
     if failed_tests > 0:
         quit(1)
