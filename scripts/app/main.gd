@@ -120,11 +120,16 @@ func _handoff_watched_flight() -> void:
 
 func _follow_aircraft() -> void:
     if _followed_aircraft_id.is_empty() or _view != View.WORLD:
+        _hud.set_following("")
         return
     var leg: FlightLeg = sim.flight_for_aircraft(_followed_aircraft_id)
     if leg == null:
         _followed_aircraft_id = ""
+        _hud.set_following("")
         return
+    var plane: AircraftInstance = sim.state.aircraft.get(_followed_aircraft_id, null)
+    if plane != null:
+        _hud.set_following("FOLLOWING %s · ESC TO STOP" % plane.display_name().to_upper())
     _camera.follow(_overlay.aircraft_world_position(_followed_aircraft_id))
 
 func _on_money_changed(amount: int) -> void:

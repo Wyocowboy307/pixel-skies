@@ -14,6 +14,8 @@ var sim: Simulation
 var _money_label: Label
 var _fleet_label: Label
 var _zoom_label: Label
+var _follow_chip: PanelContainer
+var _follow_label: Label
 var _card: PanelContainer
 var _card_code: Label
 var _card_city: Label
@@ -64,6 +66,23 @@ func _build_top_bar() -> void:
 
     _zoom_label = UiTheme.label("", "card_hi")
     row.add_child(_zoom_label)
+
+## A small chip that says the camera is locked to an aircraft, and how to stop.
+func set_following(text: String) -> void:
+    if _follow_chip == null:
+        _follow_chip = PanelContainer.new()
+        _follow_chip.theme_type_variation = "HudBar"
+        _follow_chip.set_anchors_preset(Control.PRESET_CENTER_TOP)
+        _follow_chip.offset_top = 20.0
+        _follow_chip.offset_left = -80.0
+        _follow_chip.offset_right = 80.0
+        _follow_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(_follow_chip)
+        _follow_label = UiTheme.label("", "white")
+        _follow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        _follow_chip.add_child(_follow_label)
+    _follow_chip.visible = not text.is_empty()
+    _follow_label.text = text
 
 func _build_airport_card() -> void:
     _card = PanelContainer.new()
