@@ -12,6 +12,7 @@ and the +y side is shadowed; in side view the top is lit and the belly shadowed.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from .canvas import Canvas
@@ -485,6 +486,71 @@ def _leg(canvas: Canvas, x: int, top: int, ground: int, wheel: float) -> None:
 # ---------------------------------------------------------------------------
 
 ROTATION_FRAMES = 16
+## The map icon is a separate, much smaller sprite. The 48 px airport sprite
+## would cover a quarter of the United States at world zoom, and simply scaling
+## it down would resample it — so the map gets its own drawing at icon scale
+## (docs/WORLD_MAP_AND_ZOOM.md, "Aircraft rendering by zoom").
+MAP_ICON_SIZE = 15
+
+
+def _map_icon_points(spec: AircraftSpec) -> list[tuple[float, float, str]]:
+    """The map aircraft as points in (along, across) aircraft space.
+
+    Kept as coordinates rather than a bitmap so each heading can be drawn
+    natively from rotated coordinates. Rotating a 15 px bitmap turns it into a
+    pinwheel; rotating the coordinates and re-plotting stays crisp.
+
+    At this size only four things can read: nose direction, wing planform,
+    single versus twin, and the airline colour.
+    """
+    livery = _livery(spec.livery)
+    big = spec.span_m >= 14.0
+    half_span = 5 if big else 4
+    nose = 6 if big else 5
+    points: list[tuple[float, float, str]] = []
+
+    for along in range(-5, nose + 1):
+        points.append((along, 0.0, livery["light"]))
+    # Wing: two rows of chord so the planform is unmistakable.
+    for across in range(-half_span, half_span + 1):
+        points.append((1.0, across, livery["base"]))
+        if abs(across) < half_span:
+            points.append((2.0, across, livery["light"]))
+    # Tailplane.
+    for across in range(-2, 3):
+        points.append((-4.0, across, livery["base"]))
+    if spec.wing_engines:
+        for across in (-3, 3):
+            points.append((2.0, across, "metal"))
+            points.append((3.0, across, "metal_dark"))
+    else:
+        for across in (-2, -1, 1, 2):
+            points.append((float(nose), across, "metal"))
+    points.append((float(nose), 0.0, "metal_light"))
+    points.append((-1.0, 0.0, livery["trim"]))
+    return points
+
+
+def build_map_icon(spec: AircraftSpec, heading_index: int = 0) -> Canvas:
+    """One heading of the map aircraft, drawn natively at that angle."""
+    canvas = Canvas(MAP_ICON_SIZE, MAP_ICON_SIZE)
+    centre = MAP_ICON_SIZE // 2
+    angle = heading_index * (2.0 * math.pi / ROTATION_FRAMES)
+    fx, fy = math.cos(angle), math.sin(angle)
+    for along, across, colour in _map_icon_points(spec):
+        x = centre + along * fx - across * fy
+        y = centre + along * fy + across * fx
+        canvas.plot(int(round(x)), int(round(y)), colour)
+    canvas.outline()
+    return canvas
+
+
+def build_map_rotation_strip(spec: AircraftSpec) -> Canvas:
+    """All headings of the map icon, each drawn natively rather than rotated."""
+    strip = Canvas(MAP_ICON_SIZE * ROTATION_FRAMES, MAP_ICON_SIZE)
+    for index in range(ROTATION_FRAMES):
+        strip.blit(build_map_icon(spec, index), index * MAP_ICON_SIZE, 0)
+    return strip
 
 
 def build_rotation_strip(spec: AircraftSpec) -> Canvas:

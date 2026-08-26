@@ -198,6 +198,19 @@ func test_arrival_moves_the_aircraft_and_delivers_the_job() -> void:
     check_eq(job.state, Job.State.DELIVERED, "job is delivered")
     check(plane.loaded_job_ids.is_empty(), "delivered payload left the aircraft")
     check_eq(plane.legs, 1, "leg counted toward the airframe's history")
+    # Without a stand the airport scene has nowhere to draw the arrival.
+    check(not plane.stand_id.is_empty(), "arriving aircraft is given a stand")
+
+func test_two_aircraft_do_not_share_a_stand() -> void:
+    var sim: Simulation = _sim()
+    sim.state.money = 999999
+    check(bool(sim.purchase_aircraft("ac_trailhopper_4")["ok"]), "second aircraft bought")
+    var stands: Dictionary = {}
+    for id: String in sim.state.aircraft:
+        var plane: AircraftInstance = sim.state.aircraft[id]
+        check(not plane.stand_id.is_empty(), "%s has a stand" % plane.registration)
+        check(not stands.has(plane.stand_id), "stand %s is not double-booked" % plane.stand_id)
+        stands[plane.stand_id] = true
 
 func test_layover_payload_stays_aboard() -> void:
     var sim: Simulation = _sim()

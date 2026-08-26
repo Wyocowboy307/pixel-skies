@@ -28,6 +28,7 @@ var _busy := false
 ## restores the exact view the player left.
 var _world_return_position := Vector2.ZERO
 var _world_return_stop := 2
+var _followed_aircraft_id := ""
 
 func _ready() -> void:
     # One theme built from the generated pixel frames, applied to the whole
@@ -40,18 +41,23 @@ func _ready() -> void:
     if not sim.load_game():
         sim.new_game()
     sim.money_changed.connect(_on_money_changed)
+    # The fleet readout tracks flights, not money, so it has to refresh when a
+    # flight starts or ends rather than only when the balance moves.
+    sim.flight_dispatched.connect(func(_leg: FlightLeg) -> void: _refresh_hud_counts())
+    sim.flight_arrived.connect(func(_settlement: Dictionary) -> void: _refresh_hud_counts())
 
     _transition = ViewTransition.new()
     add_child(_transition)
 
     _map.bind_camera(_camera)
     _hud.bind_sim(sim)
-    _overlay.bind(db, _camera)
+    _overlay.bind(db, _camera, sim)
     _hud.bind(db)
 
     _overlay.airport_clicked.connect(_on_airport_clicked)
     _overlay.airport_activated.connect(_on_airport_activated)
     _overlay.background_clicked.connect(_on_background_clicked)
+    _overlay.aircraft_clicked.connect(_on_aircraft_clicked)
     _hud.focus_requested.connect(_on_airport_activated)
     _hud.home_requested.connect(_on_home_requested)
     _camera.view_changed.connect(_update_zoom_readout)
@@ -66,9 +72,22 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
     # Timestamps do the work; this only notices when a boundary has been passed.
     sim.tick()
+    _follow_aircraft()
+
+func _follow_aircraft() -> void:
+    if _followed_aircraft_id.is_empty() or _view != View.WORLD:
+        return
+    var leg: FlightLeg = sim.flight_for_aircraft(_followed_aircraft_id)
+    if leg == null:
+        _followed_aircraft_id = ""
+        return
+    _camera.follow(_overlay.aircraft_world_position(_followed_aircraft_id))
 
 func _on_money_changed(amount: int) -> void:
     _hud.set_money(amount)
+
+func _refresh_hud_counts() -> void:
+    _hud.set_money(sim.state.money)
 
 func _report_data_problems() -> void:
     if not OS.is_debug_build():
@@ -95,7 +114,14 @@ func _on_airport_activated(airport_id: String) -> void:
     _overlay.selected_airport_id = airport_id
     enter_airport(airport_id)
 
+## Selecting a flying aircraft locks the camera to it. Watching is optional and
+## observational — it never becomes manual flying (docs/FLIGHT_SYSTEM.md).
+func _on_aircraft_clicked(aircraft_id: String) -> void:
+    _followed_aircraft_id = aircraft_id
+    _hud.clear_airport()
+
 func _on_background_clicked() -> void:
+    _followed_aircraft_id = ""
     _hud.clear_airport()
 
 func _on_home_requested() -> void:
@@ -182,8 +208,12 @@ func exit_airport() -> void:
 
 ## A departure is the moment the airline does something, so the view follows it
 ## out to the world map rather than leaving the player staring at an empty stand.
-func _on_dispatch_completed(_flight_id: String) -> void:
+func _on_dispatch_completed(flight_id: String) -> void:
     _airport_view.queue_redraw()
+    var leg: FlightLeg = sim.state.flights.get(flight_id, null)
+    if leg != null:
+        _followed_aircraft_id = leg.aircraft_id
+        _overlay.selected_aircraft_id = leg.aircraft_id
 
 func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):

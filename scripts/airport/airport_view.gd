@@ -13,8 +13,6 @@ const TILE := 16
 const TILES := "res://assets/art/airports/tiles/%s.png"
 const BUILDINGS := "res://assets/art/airports/buildings/%s.png"
 const VEHICLES := "res://assets/art/airports/vehicles/%s.png"
-const AIRCRAFT_ROT := "res://assets/art/aircraft/%s/%s_top_rot.png"
-const ROTATION_FRAMES := 16
 
 var airport_id := ""
 var layout: Dictionary = {}
@@ -25,7 +23,6 @@ var selected_aircraft_id := ""
 var _biome := "mountain"
 var _tiles: Dictionary = {}
 var _sprites: Dictionary = {}
-var _rotations: Dictionary = {}
 var _scatter: Array[Dictionary] = []
 var _prop_phase := 0.0
 
@@ -72,13 +69,6 @@ func _sprite(path: String) -> Texture2D:
     if not _sprites.has(path):
         _sprites[path] = load(path) if ResourceLoader.exists(path) else null
     return _sprites[path]
-
-func _rotation_strip(family_id: String) -> Texture2D:
-    if not _rotations.has(family_id):
-        var key: String = family_id.replace("ac_", "")
-        var path: String = AIRCRAFT_ROT % [key, key]
-        _rotations[family_id] = load(path) if ResourceLoader.exists(path) else null
-    return _rotations[family_id]
 
 func _grass_tile() -> String:
     match _biome:
@@ -410,15 +400,7 @@ func _draw_parked_aircraft() -> void:
             PixelPalette.get_colour("text"))
 
 func draw_aircraft(family_id: String, at: Vector2, heading: float) -> void:
-    var strip: Texture2D = _rotation_strip(family_id)
-    if strip == null:
-        return
-    var frame_size: float = strip.get_size().y
-    var frame: int = int(roundf(heading / TAU * float(ROTATION_FRAMES)))
-    frame = ((frame % ROTATION_FRAMES) + ROTATION_FRAMES) % ROTATION_FRAMES
-    var region := Rect2(Vector2(float(frame) * frame_size, 0.0), Vector2(frame_size, frame_size))
-    draw_texture_rect_region(strip,
-        Rect2((at - Vector2(frame_size, frame_size) * 0.5).round(), region.size), region)
+    AircraftSprites.draw_ground(self, family_id, at, heading)
 
 ## Corner brackets rather than a circle: four short pixel runs stay crisp.
 func _selection_bracket(at: Vector2, box: float) -> void:

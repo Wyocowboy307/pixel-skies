@@ -120,6 +120,14 @@ func focus_on(world_pos: Vector2, stop_index: int, screen_anchor: Vector2 = Vect
     _clamp_target()
     zoom_changed.emit(_target_zoom)
 
+## Keeps a moving target framed without fighting the player's own panning: the
+## target is simply assigned, and the existing lerp does the smoothing.
+func follow(world_pos: Vector2) -> void:
+    if _panning:
+        return
+    _target_position = world_pos
+    _clamp_target()
+
 func _process(delta: float) -> void:
     var changed := false
 
@@ -154,6 +162,9 @@ func _process(delta: float) -> void:
         changed = true
 
     _clamp_target()
+    # A camera on a fractional position makes the map sample between texels and
+    # shimmer as it moves, which no amount of nearest filtering will fix.
+    global_position = global_position.round()
     if changed:
         view_changed.emit()
 

@@ -31,6 +31,22 @@ func _init(database: GameDB, id_source: Ids) -> void:
     db = database
     ids = id_source
 
+## First stand at `airport_id` that no parked aircraft is occupying.
+##
+## An arriving aircraft has to be given one, or it lands with no stand and the
+## airport scene has nowhere to draw it.
+func free_stand(state: AirlineState, airport_id: String) -> String:
+    var layout: Dictionary = db.layout_for_airport(airport_id)
+    var taken: Dictionary = {}
+    for plane: AircraftInstance in state.aircraft_at(airport_id):
+        if not plane.stand_id.is_empty():
+            taken[plane.stand_id] = true
+    for entry: Variant in layout.get("stands", []):
+        var stand_id: String = String((entry as Dictionary).get("id", ""))
+        if not stand_id.is_empty() and not taken.has(stand_id):
+            return stand_id
+    return ""
+
 func distance_between(origin_id: String, destination_id: String) -> float:
     var a: Dictionary = db.airports.get(origin_id, {})
     var b: Dictionary = db.airports.get(destination_id, {})
@@ -175,6 +191,7 @@ func _settle(state: AirlineState, leg: FlightLeg) -> Dictionary:
         plane.state = AircraftInstance.State.PARKED
         plane.flight_id = ""
         plane.location_id = leg.destination_id
+        plane.stand_id = free_stand(state, leg.destination_id)
         plane.loaded_job_ids = carried_on
         plane.legs += 1
         plane.hours += (leg.arrival_unix - leg.departure_unix) / 3600.0

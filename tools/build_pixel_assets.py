@@ -18,8 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pixelart import font_build, scenery, ui                      # noqa: E402
-from pixelart.aircraft import (SPECS, build_rotation_strip,        # noqa: E402
-                               build_side, build_top)
+from pixelart.aircraft import (SPECS, build_map_rotation_strip,    # noqa: E402
+                               build_rotation_strip, build_side, build_top)
 from pixelart.palette import PALETTE                              # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +34,8 @@ def build_aircraft() -> int:
         build_top(spec).save(folder / f"{key}_top.png", f"{key}_top")
         build_side(spec).save(folder / f"{key}_side.png", f"{key}_side")
         build_rotation_strip(spec).save(folder / f"{key}_top_rot.png", f"{key}_top_rot")
-        count += 3
+        build_map_rotation_strip(spec).save(folder / f"{key}_map_rot.png", f"{key}_map_rot")
+        count += 4
     return count
 
 

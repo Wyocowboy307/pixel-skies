@@ -8,6 +8,8 @@ extends Control
 ## screen space also keeps marker and line thickness constant while zooming.
 
 signal airport_clicked(airport_id: String)
+signal aircraft_clicked(aircraft_id: String)
+signal aircraft_activated(aircraft_id: String)
 signal airport_activated(airport_id: String)
 signal background_clicked()
 
@@ -30,6 +32,11 @@ var _font: Font
 
 var db: GameDB
 var camera: WorldCamera
+var sim: Simulation
+
+var selected_aircraft_id := ""
+## Aircraft screen positions computed this frame, reused for picking.
+var _aircraft_screen: Dictionary = {}
 
 var selected_airport_id := ""
 var hovered_airport_id := ""
@@ -61,9 +68,10 @@ func _colour(key: String) -> Color:
 func _snap(point: Vector2) -> Vector2:
     return Vector2(roundf(point.x), roundf(point.y))
 
-func bind(database: GameDB, world_camera: WorldCamera) -> void:
+func bind(database: GameDB, world_camera: WorldCamera, simulation: Simulation = null) -> void:
     db = database
     camera = world_camera
+    sim = simulation
     camera.view_changed.connect(queue_redraw)
     _rebuild_routes()
 
@@ -78,6 +86,8 @@ func _rebuild_routes() -> void:
 
 func _process(delta: float) -> void:
     _pulse = fposmod(_pulse + delta, TAU)
+    if sim != null and not sim.state.active_flights().is_empty():
+        queue_redraw()
     var previous := hovered_airport_id
     hovered_airport_id = _airport_at(get_viewport().get_mouse_position())
     if previous != hovered_airport_id:
@@ -104,6 +114,16 @@ func airport_screen_position(airport_id: String) -> Vector2:
         WorldProjection.to_world(float(airport["lat"]), float(airport["lon"])))
     return camera.world_to_screen(world)
 
+func _aircraft_at(screen_pos: Vector2) -> String:
+    var best := ""
+    var best_distance := 12.0
+    for aircraft_id: String in _aircraft_screen:
+        var distance: float = (_aircraft_screen[aircraft_id] as Vector2).distance_to(screen_pos)
+        if distance < best_distance:
+            best_distance = distance
+            best = aircraft_id
+    return best
+
 func _airport_at(screen_pos: Vector2) -> String:
     if db == null or camera == null:
         return ""
@@ -126,8 +146,23 @@ func _unhandled_input(event: InputEvent) -> void:
     var button := event as InputEventMouseButton
     if button.button_index != MOUSE_BUTTON_LEFT or not button.pressed:
         return
+    var aircraft_hit: String = _aircraft_at(button.position)
+    if not aircraft_hit.is_empty():
+        var repeat: bool = aircraft_hit == selected_aircraft_id
+        selected_aircraft_id = aircraft_hit
+        get_viewport().set_input_as_handled()
+        queue_redraw()
+        # Click selects; clicking the selected aircraft again opens its detail
+        # view (docs/UI_UX.md, "Plane selection").
+        if repeat:
+            aircraft_activated.emit(aircraft_hit)
+        else:
+            aircraft_clicked.emit(aircraft_hit)
+        return
+
     var hit: String = _airport_at(button.position)
     if hit.is_empty():
+        selected_aircraft_id = ""
         selected_airport_id = ""
         background_clicked.emit()
         queue_redraw()
@@ -160,6 +195,7 @@ func _draw() -> void:
         _draw_marker(entry)
     for entry: Dictionary in _label_order(visible):
         _draw_label(entry)
+    _draw_flights()
 
 func _visible_airports() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
@@ -300,3 +336,90 @@ func _collides(rect: Rect2) -> bool:
         if taken.intersects(rect):
             return true
     return false
+
+
+# ---------------------------------------------------------------------------
+# Live aircraft
+# ---------------------------------------------------------------------------
+
+## Sprite scale follows the map's own texel scale, so an aircraft is never drawn
+## at a finer pixel density than the terrain beneath it.
+func _map_pixel_scale() -> int:
+    var tier: int = WorldLod.tier_for_zoom(minf(camera.current_zoom(), camera.target_zoom()))
+    return maxi(1, int(roundf(WorldLod.world_scale(tier) * camera.current_zoom())))
+
+func _draw_flights() -> void:
+    _aircraft_screen.clear()
+    if sim == null:
+        return
+    var now: float = sim.now()
+    var scale: int = _map_pixel_scale()
+    var font: Font = _font
+    for leg: FlightLeg in sim.state.active_flights():
+        var place: Dictionary = sim.flights.position_of(leg, now)
+        var world: Vector2 = _nearest_copy(
+            WorldProjection.to_world(float(place["lat"]), float(place["lon"])))
+        var at: Vector2 = _snap(camera.world_to_screen(world))
+        if at.x < -32.0 or at.y < -32.0 or at.x > size.x + 32.0 or at.y > size.y + 32.0:
+            continue
+        _aircraft_screen[leg.aircraft_id] = at
+
+        var plane: AircraftInstance = sim.state.aircraft.get(leg.aircraft_id, null)
+        if plane == null:
+            continue
+        var heading: float = AircraftSprites.bearing_to_screen(float(place["bearing"]))
+
+        if camera.current_zoom() <= 0.5:
+            # Far out an aircraft is a directional pixel, not a sprite
+            # (docs/WORLD_MAP_AND_ZOOM.md, "Aircraft rendering by zoom").
+            draw_rect(Rect2(at - Vector2.ONE, Vector2(3, 3)), _colour("outline"))
+            draw_rect(Rect2(at, Vector2.ONE), _colour("accent_orange_light"))
+            continue
+
+        if leg.aircraft_id == selected_aircraft_id:
+            _draw_track(leg, scale)
+        AircraftSprites.draw_map(self, plane.family_id, at, heading, scale)
+        if leg.aircraft_id == selected_aircraft_id:
+            _flight_tag(font, plane, leg, at, now, scale)
+
+## The remaining route of the selected flight, so "where is it going" is
+## answerable without opening a panel.
+func _draw_track(leg: FlightLeg, scale: int) -> void:
+    var origin: Dictionary = db.airports.get(leg.origin_id, {})
+    var destination: Dictionary = db.airports.get(leg.destination_id, {})
+    if origin.is_empty() or destination.is_empty():
+        return
+    var points: PackedVector2Array = _route_points(origin, destination)
+    var travelled := 0
+    for i in range(points.size() - 1):
+        var from: Vector2 = points[i]
+        var to: Vector2 = points[i + 1]
+        var steps: int = maxi(1, int(from.distance_to(to)))
+        for step in range(steps):
+            travelled += 1
+            if (travelled / 2) % 2 == 1:
+                continue
+            var at: Vector2 = _snap(from.lerp(to, float(step) / float(steps)))
+            draw_rect(Rect2(at, Vector2.ONE * float(scale)), _colour("accent_orange"))
+
+func _flight_tag(font: Font, plane: AircraftInstance, leg: FlightLeg,
+        at: Vector2, now: float, scale: int) -> void:
+    var destination: Dictionary = db.airports.get(leg.destination_id, {})
+    var text: String = "%s → %s · %s" % [
+        plane.display_name(), String(destination.get("code", "")),
+        UiTheme.duration(leg.seconds_remaining(now))]
+    var origin: Vector2 = _snap(at + Vector2(9.0 * float(scale), -4.0))
+    draw_string(font, origin + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("outline"))
+    draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("accent_orange_light"))
+
+## World position of an aircraft in flight, for the follow camera.
+func aircraft_world_position(aircraft_id: String) -> Vector2:
+    if sim == null:
+        return Vector2.ZERO
+    var leg: FlightLeg = sim.flight_for_aircraft(aircraft_id)
+    if leg == null:
+        return Vector2.ZERO
+    var place: Dictionary = sim.flights.position_of(leg, sim.now())
+    return WorldProjection.to_world(float(place["lat"]), float(place["lon"]))

@@ -230,20 +230,9 @@ func _create_aircraft(family_id: String, airport_id: String) -> AircraftInstance
     plane.home_base_id = airport_id
     plane.location_id = airport_id
     plane.configuration = String(family.get("default_configuration", "mixed"))
-    plane.stand_id = _free_stand(airport_id)
+    plane.stand_id = flights.free_stand(state, airport_id)
     state.aircraft[plane.id] = plane
     return plane
-
-func _free_stand(airport_id: String) -> String:
-    var layout: Dictionary = db.layout_for_airport(airport_id)
-    var taken: Dictionary = {}
-    for plane: AircraftInstance in state.aircraft_at(airport_id):
-        taken[plane.stand_id] = true
-    for entry: Variant in layout.get("stands", []):
-        var stand_id: String = String((entry as Dictionary).get("id", ""))
-        if not taken.has(stand_id):
-            return stand_id
-    return ""
 
 func purchase_check(family_id: String) -> Dictionary:
     var family: Dictionary = db.aircraft.get(family_id, {})
@@ -253,7 +242,7 @@ func purchase_check(family_id: String) -> Dictionary:
     if state.money < cost:
         return Rules.no("Need $%s — you have $%s" % [
             _money(cost), _money(state.money)])
-    if _free_stand(state.home_base_id).is_empty():
+    if flights.free_stand(state, state.home_base_id).is_empty():
         # Capacity comes from visible facilities, never an arbitrary slot fee
         # (CLAUDE.md, "Non-negotiable experience").
         return Rules.no("No free stand at %s — expand the station first" % state.home_base_id.to_upper().replace("APT_", ""))
