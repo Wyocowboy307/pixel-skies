@@ -249,6 +249,15 @@ func purchase_aircraft_upgrade(aircraft_id: String, upgrade_id: String) -> Dicti
     money_changed.emit(state.money)
     return Rules.ok()
 
+## Public lookup of an upgrade definition on a family, for UI that needs the
+## name, blurb and effects of a kit it is displaying.
+func aircraft_upgrade(family_id: String, upgrade_id: String) -> Dictionary:
+    var family: Dictionary = db.aircraft.get(family_id, {})
+    for entry: Variant in family.get("upgrades", []):
+        if String((entry as Dictionary).get("id", "")) == upgrade_id:
+            return entry
+    return {}
+
 func _find_aircraft_upgrade(plane: AircraftInstance, upgrade_id: String) -> Dictionary:
     var family: Dictionary = db.aircraft.get(plane.family_id, {})
     for entry: Variant in family.get("upgrades", []):
