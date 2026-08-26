@@ -1,27 +1,42 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource path="res://scripts/main.gd" type="Script" id="1"]
+[ext_resource path="res://scripts/world/world_map_view.gd" type="Script" id="2"]
+[ext_resource path="res://scripts/world/world_camera.gd" type="Script" id="3"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="WorldMap" type="Node2D" parent="."]
+script = ExtResource("2")
+
+[node name="WorldCamera" type="Camera2D" parent="."]
+position = Vector2(1024, 512)
+zoom = Vector2(0.5, 0.5)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+script = ExtResource("3")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="TopBar" type="ColorRect" parent="HUD"]
 offset_right = 1280.0
-offset_bottom = 720.0
-color = Color(0.055, 0.09, 0.12, 1.0)
+offset_bottom = 52.0
+color = Color(0.035, 0.055, 0.075, 0.92)
 mouse_filter = 2
 
-[node name="Title" type="Label" parent="."]
-offset_left = 36.0
-offset_top = 30.0
-offset_right = 420.0
-offset_bottom = 72.0
-text = "PIXEL SKIES — foundation"
-theme_override_font_sizes/font_size = 24
+[node name="Title" type="Label" parent="HUD"]
+offset_left = 20.0
+offset_top = 12.0
+offset_right = 320.0
+offset_bottom = 42.0
+text = "PIXEL SKIES"
+theme_override_font_sizes/font_size = 20
 
-[node name="Status" type="Label" parent="."]
-offset_left = 36.0
-offset_top = 84.0
-offset_right = 800.0
-offset_bottom = 130.0
-text = "World/airport/aircraft architecture loaded. Claude: build the vertical slice."
+[node name="Hint" type="Label" parent="HUD"]
+offset_left = 820.0
+offset_top = 15.0
+offset_right = 1260.0
+offset_bottom = 40.0
+text = "Wheel: zoom   Middle-drag: pan"
+horizontal_alignment = 2
