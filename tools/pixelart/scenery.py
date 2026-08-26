@@ -477,14 +477,14 @@ def portrait(hair: str, shirt: str) -> Canvas:
 
 
 def seat_empty() -> Canvas:
-    """An empty cabin seat, drawn into a window slot so 0/4 reads as four
-    visibly empty seats rather than four dark rectangles."""
+    """An empty cabin seat for the cutaway band — bright orange, so an empty
+    place reads instantly against the white interior."""
     canvas = Canvas(11, 11)
-    canvas.rect(1, 1, 3, 8, "roof_cargo")       # backrest
-    canvas.vline(1, 1, 8, "sand_light")
-    canvas.rect(1, 7, 8, 3, "roof_cargo")       # cushion
-    canvas.hline(1, 8, 7, "sand_light")
-    canvas.hline(2, 8, 9, "soil")
+    canvas.rect(1, 1, 3, 8, "accent_orange")     # backrest
+    canvas.vline(1, 1, 8, "accent_orange_light")
+    canvas.rect(1, 7, 8, 3, "accent_orange")     # cushion
+    canvas.hline(1, 8, 7, "accent_orange_light")
+    canvas.hline(2, 8, 9, "accent_red")
     canvas.outline()
     return canvas
 

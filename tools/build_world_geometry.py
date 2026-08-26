@@ -51,8 +51,10 @@ BASE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/maste
 OCEAN_DEEP = "map_ocean_deep"
 OCEAN = "map_ocean"
 SHELF = "map_shelf"
-COAST = "map_coast"
-COAST_LIT = "map_shelf"
+# Warm coastline against saturated blue: the outline that makes landmasses pop
+# from the ocean instead of dissolving into it.
+COAST = "accent_red"
+COAST_LIT = "accent_orange"
 LAKE = "map_river"
 BORDER = "map_coast"
 
@@ -359,13 +361,14 @@ def render(lod: Lod) -> Image.Image:
 
     field = bayer(lod.height, lod.width)
     rgb_buffer = np.zeros((lod.height, lod.width, 3), dtype=np.uint8)
-    rgb_buffer[:] = rgb(OCEAN_DEEP)
 
     # Shelf and open-ocean rings separate land from deep water without relying
     # on the coastline outline to do all the work.
+    # Bright ocean as the base — a dark base reads as a void, not a sea — with
+    # only a light sparkle of deep water and a pale shelf hugging the land.
+    rgb_buffer[:] = rgb(OCEAN)
+    dither_mix(rgb_buffer, ~land, OCEAN, OCEAN_DEEP, 0.12, field)
     shelf = dilate(land, lod.shelf_px) & ~land
-    open_ocean = dilate(land, lod.shelf_px * 3) & ~land & ~shelf
-    dither_mix(rgb_buffer, open_ocean, OCEAN, OCEAN_DEEP, 0.35, field)
     rgb_buffer[shelf] = rgb(SHELF)
 
     # Land colour by latitude band, with the interior stippled darker.

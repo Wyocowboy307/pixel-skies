@@ -56,14 +56,19 @@ class CharmSide:
 
 
 TRAILHOPPER = CharmSide(
-    canvas=(144, 96),
-    body_length=100, body_height=46,
-    nose_start=0.84, tail_end=0.24, tail_keep=0.34,
-    fin_height=28, fin_root=26,
-    gear_height=12, wheel_radius=8, prop_radius=19,
-    seat_slot=11, seats=4, seat_start=30, seat_step=13,
-    cargo_slot=11, cargo_slots=3, cargo_start=30, cargo_step=13,
-    seat_row_y=6, cargo_row_y=24,
+    # Longer than the first pass: the cutaway band needs runway. The band must
+    # end before the nose begins or it eats the windscreen, and it may overlap
+    # the tail cone only slightly.
+    canvas=(176, 96),
+    body_length=132, body_height=44,
+    nose_start=0.82, tail_end=0.20, tail_keep=0.36,
+    fin_height=27, fin_root=25,
+    gear_height=12, wheel_radius=8, prop_radius=16,
+    # Six seat anchors, not four: the cabin band is sized for the upgraded
+    # aircraft, so buying Cabin Plus visibly adds seats to the same airframe.
+    seat_slot=10, seats=6, seat_start=27, seat_step=12,
+    cargo_slot=10, cargo_slots=4, cargo_start=33, cargo_step=12,
+    seat_row_y=5, cargo_row_y=22,
 )
 
 
@@ -170,33 +175,37 @@ def _body(canvas: Canvas, style: CharmSide, livery: dict[str, str],
 
 def _cabin(canvas: Canvas, style: CharmSide, livery: dict[str, str],
            seats: list[tuple[int, int]], cargo: list[tuple[int, int]], station) -> None:
-    """Window frames and the cargo bay opening.
+    """The open cutaway interior — the defining feature of the plane screen.
 
-    Both are drawn as empty recesses. The game fills them with passengers and
-    crates, so what the player sees in them is the actual manifest.
+    Instead of windows, the fuselage side is cut away to show a bright cabin
+    band and an open hold. The band itself is empty: the game draws seats,
+    passengers and crates onto the anchors, so what the player sees inside the
+    aircraft is always the actual manifest (and upgrades add real seats).
     """
     slot = style.seat_slot
-    for x, y in seats:
-        canvas.rect(x, y, slot, slot, "glass")
-        canvas.rect_outline(x - 1, y - 1, slot + 2, slot + 2, livery["dark"])
-        canvas.hline(x, x + slot - 1, y, "glass_light")
+    if seats:
+        x0 = seats[0][0] - 2
+        x1 = seats[-1][0] + slot + 2
+        y0 = seats[0][1] - 2
+        height = slot + 5
+        canvas.rect(x0, y0, x1 - x0, height, "white")
+        canvas.hline(x0, x1 - 1, y0 + height - 2, "ice")        # cabin floor
+        canvas.hline(x0, x1 - 1, y0 + height - 1, "ice")
+        canvas.hline(x0, x1 - 1, y0, "ice_light")               # ceiling shade
+        canvas.rect_outline(x0 - 1, y0 - 1, x1 - x0 + 2, height + 2, livery["dark"])
+        canvas.rect_outline(x0, y0, x1 - x0, height, "outline")
 
     bay = style.cargo_slot
     if cargo:
         left = cargo[0][0] - 2
-        right = cargo[-1][0] + bay + 1
+        right = cargo[-1][0] + bay + 2
         top = cargo[0][1] - 2
-        # A lit interior, not a black cut-out: an unlit bay reads as a hole
-        # punched through the fuselage rather than as a space you can fill.
-        canvas.rect(left, top, right - left, bay + 3, "wall")
-        canvas.hline(left, right - 1, top, "shadow")
-        canvas.hline(left, right - 1, top + bay + 2, "wall_light")
-        canvas.rect_outline(left, top, right - left, bay + 3, livery["dark"])
-        for x, _y in cargo[1:]:
-            canvas.vline(x - 1, top + 1, top + bay + 1, "shadow")
-        # Open hatch flap above the bay: "this is where it loads".
-        canvas.rect(left + 1, top - 3, right - left - 2, 2, livery["light"])
-        canvas.hline(left + 1, right - 2, top - 3, livery["dark"])
+        height = bay + 4
+        canvas.rect(left, top, right - left, height, "ice_light")
+        canvas.hline(left, right - 1, top + height - 2, "ice")   # hold floor
+        canvas.hline(left, right - 1, top + height - 1, "ice")
+        canvas.rect_outline(left - 1, top - 1, right - left + 2, height + 2, livery["dark"])
+        canvas.rect_outline(left, top, right - left, height, "outline")
 
 
 def _wing(canvas: Canvas, style: CharmSide, livery: dict[str, str],
@@ -255,6 +264,12 @@ def _nose(canvas: Canvas, style: CharmSide, livery: dict[str, str],
         for dy in range(rows):
             canvas.plot(x, top + 2 + dy, "glass_light" if dy == 0 else "glass")
     canvas.vline(back - 1, station(back)[0] + 2, station(back)[0] + 10, "metal_dark")
+    # The pilot, visible through the glass: two pixels of person that make the
+    # aircraft read as crewed rather than empty.
+    var_top = station(back + 2)[0]
+    canvas.rect(back + 2, var_top + 4, 3, 3, "sand_light")
+    canvas.hline(back + 2, back + 4, var_top + 4, "soil")
+    canvas.rect(back + 2, var_top + 7, 3, 2, "btn_green")
 
     # Cowl.
     for x in range(nose - 5, nose + 1):

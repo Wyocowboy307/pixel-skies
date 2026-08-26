@@ -29,7 +29,7 @@ NEGATIVE = (
     "gradient, colour banding, glow, noisy dithering, technical diagram, "
     "blueprint, schematic, cluttered detail, rivets, text, letters, numbers, "
     "logo, watermark, drop shadow, realistic proportions, long thin fuselage, "
-    "many wheels, landing gear bogies, facing left, jet engines"
+    "many wheels, landing gear bogies, facing left, jet engines, closed windows, portholes"
 )
 
 # Structured controls, chosen to match docs/PIXEL_STYLE_GUIDE.md exactly.
@@ -93,9 +93,10 @@ STARTER: list[AssetSpec] = [
             "side view of a tiny chunky cartoon bush aeroplane facing right, "
             "propeller and round nose at the right edge, tall tail fin at the "
             "left edge, stubby rounded fuselage twice as long as it is tall, "
-            "high wing, exactly four big round passenger windows in one row, "
-            "exactly two fat black wheels on short legs, cream body with an "
-            "orange belly stripe, flat blocks of solid colour with no gradients"
+            "open cutaway fuselage showing a bright white cabin interior with "
+            "a row of four empty orange passenger seats, high wing, exactly "
+            "two fat black wheels on short legs, cream body with an orange "
+            "belly stripe, flat blocks of solid colour with no gradients"
         ),
         size=(128, 96), view="side", direction="west", coverage=86.0,
         is_reference=True,
@@ -219,6 +220,17 @@ STARTER: list[AssetSpec] = [
         size=(16, 16), view="side", detail="low detail", coverage=80.0,
     ),
 ]
+
+
+STARTER.append(AssetSpec(
+    key="cloud",
+    logical="world/cloud_1.png",
+    prompt=(
+        "a single fluffy cartoon cloud, flat bottom, puffy rounded top, pure "
+        "white with pale ice-blue shading underneath, chunky and simple"
+    ),
+    size=(36, 16), view="side", detail="low detail", coverage=86.0,
+))
 
 
 def by_key(key: str) -> AssetSpec | None:
