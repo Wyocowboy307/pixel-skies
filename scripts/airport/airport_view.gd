@@ -8,12 +8,22 @@ extends Node2D
 ## same layout data.
 
 const GROUND_PATCHES := 220
+## Aircraft are drawn larger than strict runway-relative scale. The plane is the
+## thing the player is here to look at, so it is exaggerated for readability the
+## way the whole art direction is (docs/GAME_BIBLE.md, "visible cause/effect").
+const AIRCRAFT_SCALE := 1.7
 const RUNWAY_DASH := 34.0
 const RUNWAY_GAP := 26.0
+
+signal aircraft_clicked(aircraft_id: String)
 
 var airport_id := ""
 var layout: Dictionary = {}
 var airport: Dictionary = {}
+var sim: Simulation
+var selected_aircraft_id := ""
+
+var _prop_phase := 0.0
 
 var _biome: Dictionary = {}
 var _patches: Array[Dictionary] = []
@@ -28,6 +38,62 @@ func setup(airport_data: Dictionary, layout_data: Dictionary) -> void:
 
 func _ready() -> void:
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    set_process(true)
+
+func bind_sim(simulation: Simulation) -> void:
+    sim = simulation
+    queue_redraw()
+
+func _process(delta: float) -> void:
+    # Propellers only spin on aircraft that are actually running, so motion in
+    # the scene always means something is happening.
+    _prop_phase = fposmod(_prop_phase + delta * 22.0, TAU)
+    if _has_running_aircraft():
+        queue_redraw()
+
+func _has_running_aircraft() -> bool:
+    if sim == null:
+        return false
+    for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
+        if plane.state != AircraftInstance.State.PARKED:
+            return true
+    return false
+
+## Stand position and heading, in local scene coordinates.
+func stand_transform(stand_id: String) -> Dictionary:
+    for entry: Variant in layout.get("stands", []):
+        var stand: Dictionary = entry
+        if String(stand.get("id", "")) == stand_id:
+            return {
+                "position": _vec(stand.get("position", [0, 0])),
+                "heading": deg_to_rad(float(stand.get("heading", 90.0))),
+                "size": String(stand.get("size", "small")),
+            }
+    return {}
+
+func aircraft_at_point(local_point: Vector2) -> String:
+    if sim == null:
+        return ""
+    for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
+        var place: Dictionary = stand_transform(plane.stand_id)
+        if place.is_empty():
+            continue
+        if (place["position"] as Vector2).distance_to(local_point) < 60.0:
+            return plane.id
+    return ""
+
+func _unhandled_input(event: InputEvent) -> void:
+    if not (event is InputEventMouseButton):
+        return
+    var button := event as InputEventMouseButton
+    if button.button_index != MOUSE_BUTTON_LEFT or not button.pressed:
+        return
+    var hit: String = aircraft_at_point(get_local_mouse_position())
+    if not hit.is_empty():
+        selected_aircraft_id = hit
+        aircraft_clicked.emit(hit)
+        get_viewport().set_input_as_handled()
+        queue_redraw()
 
 ## Scatter is generated once from a fixed seed so the ground never shimmers
 ## between frames and looks identical every time this airport is opened.
@@ -48,6 +114,14 @@ func _extent() -> Vector2:
     var raw: Array = layout.get("ground_extent", [1500, 900])
     return Vector2(float(raw[0]), float(raw[1])) * 0.5
 
+## Where the camera should sit by default: the apron, pulled slightly toward the
+## runway so both the stands and the departure end are in frame.
+func apron_centre() -> Vector2:
+    var apron: Dictionary = layout.get("apron", {})
+    if apron.is_empty():
+        return Vector2.ZERO
+    return _vec(apron.get("centre", [0, 0])) + Vector2(0.0, 60.0)
+
 func bounds() -> Rect2:
     var extent: Vector2 = _extent()
     return Rect2(-extent, extent * 2.0)
@@ -67,6 +141,7 @@ func _draw() -> void:
     _draw_apron()
     _draw_stands()
     _draw_buildings()
+    _draw_parked_aircraft()
 
 func _all_runways() -> Array[Dictionary]:
     var out: Array[Dictionary] = []
@@ -273,11 +348,13 @@ func _draw_stands() -> void:
             String(stand.get("id", "")).replace("stand_", "S"),
             HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(AirportPalette.MARK_YELLOW, 0.85))
 
+## Stand markings are sized to the aircraft they hold, which are drawn at
+## AIRCRAFT_SCALE, so the two stay visually consistent.
 func _stand_span(size_name: String) -> float:
     match size_name:
-        "large": return 92.0
-        "medium": return 68.0
-        _: return 48.0
+        "large": return 150.0
+        "medium": return 112.0
+        _: return 82.0
 
 ## Buildings get a roof plus a short south face, the "tiny amount of readable
 ## side information" the art bible allows in an otherwise flat-lay view.
@@ -305,6 +382,30 @@ func _draw_buildings() -> void:
             var extents: Vector2 = font.get_string_size(code, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
             draw_string(font, position - Vector2(extents.x * 0.5, -6.0), code,
                 HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(AirportPalette.MARK_WHITE, 0.75))
+
+## Aircraft the airline has on the ground here, drawn on their assigned stands.
+func _draw_parked_aircraft() -> void:
+    if sim == null:
+        return
+    for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
+        var place: Dictionary = stand_transform(plane.stand_id)
+        if place.is_empty():
+            continue
+        var family: Dictionary = sim.db.aircraft.get(plane.family_id, {})
+        var at: Vector2 = place["position"]
+        var heading: float = place["heading"]
+        var running: float = _prop_phase if plane.state != AircraftInstance.State.PARKED else -1.0
+
+        if plane.id == selected_aircraft_id:
+            draw_arc(at, 78.0, 0.0, TAU, 36, Color(AirportPalette.MARK_WHITE, 0.5), 1.5)
+        AircraftArt.draw_top(self, at, heading, family, AIRCRAFT_SCALE,
+            AircraftArt.livery_color(plane.livery), running)
+
+        var font: Font = ThemeDB.fallback_font
+        var label: String = plane.display_name()
+        var extents: Vector2 = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12)
+        draw_string(font, at + Vector2(-extents.x * 0.5, 74.0), label,
+            HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(AirportPalette.MARK_WHITE, 0.8))
 
 # ---------------------------------------------------------------------------
 # Helpers

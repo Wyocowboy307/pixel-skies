@@ -15,9 +15,12 @@ const TEXT_DIM := Color("#8fa8b4")
 const ACCENT := Color("#f3ad63")
 
 var db: GameDB
+var sim: Simulation
 
 var _top_bar: PanelContainer
 var _zoom_label: Label
+var _money_label: Label
+var _fleet_label: Label
 var _card: PanelContainer
 var _card_code: Label
 var _card_city: Label
@@ -33,6 +36,10 @@ func _ready() -> void:
 
 func bind(database: GameDB) -> void:
     db = database
+
+func bind_sim(simulation: Simulation) -> void:
+    sim = simulation
+    set_money(sim.state.money)
 
 # ---------------------------------------------------------------------------
 # Construction
@@ -70,6 +77,16 @@ func _build_top_bar() -> void:
     title.add_theme_font_size_override("font_size", 18)
     title.add_theme_color_override("font_color", TEXT)
     row.add_child(title)
+
+    _money_label = Label.new()
+    _money_label.add_theme_font_size_override("font_size", 18)
+    _money_label.add_theme_color_override("font_color", ACCENT)
+    row.add_child(_money_label)
+
+    _fleet_label = Label.new()
+    _fleet_label.add_theme_font_size_override("font_size", 13)
+    _fleet_label.add_theme_color_override("font_color", TEXT_DIM)
+    row.add_child(_fleet_label)
 
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -134,6 +151,12 @@ func _build_airport_card() -> void:
 # ---------------------------------------------------------------------------
 # Updates
 # ---------------------------------------------------------------------------
+
+func set_money(amount: int) -> void:
+    _money_label.text = "$%s" % Simulation._money(amount)
+    if sim != null:
+        var fleet: Dictionary = sim.state.fleet_summary()
+        _fleet_label.text = "fleet %d · %d flying" % [int(fleet["total"]), int(fleet["flying"])]
 
 func set_zoom_readout(zoom: float, tier_name: String) -> void:
     _zoom_label.text = "zoom %.2fx · %s" % [zoom, tier_name]

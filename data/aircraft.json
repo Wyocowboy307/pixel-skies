@@ -35,7 +35,17 @@
           "seats": 2,
           "cargo_units": 2
         }
-      ]
+      ],
+      "silhouette": {
+        "length": 34,
+        "span": 48,
+        "engines": 1,
+        "engine_mount": "nose",
+        "wing": "high",
+        "wing_position": 0.3,
+        "tail_span": 18,
+        "gear": "taildragger"
+      }
     },
     {
       "id": "ac_twinwing_8",
@@ -71,7 +81,17 @@
           "seats": 4,
           "cargo_units": 3
         }
-      ]
+      ],
+      "silhouette": {
+        "length": 46,
+        "span": 64,
+        "engines": 2,
+        "engine_mount": "wing",
+        "wing": "low",
+        "wing_position": 0.38,
+        "tail_span": 24,
+        "gear": "tricycle"
+      }
     },
     {
       "id": "ac_highline_19",
@@ -107,7 +127,17 @@
           "seats": 10,
           "cargo_units": 5
         }
-      ]
+      ],
+      "silhouette": {
+        "length": 64,
+        "span": 82,
+        "engines": 2,
+        "engine_mount": "wing",
+        "wing": "high",
+        "wing_position": 0.34,
+        "tail_span": 30,
+        "gear": "tricycle"
+      }
     }
   ]
 }

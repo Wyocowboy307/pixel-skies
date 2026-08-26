@@ -5,7 +5,7 @@ extends Node2D
 
 const WORLD_ZOOM_STOP := 0
 const AIRPORT_APPROACH_STOP := 5
-const AIRPORT_CAMERA_ZOOM := 0.62
+const AIRPORT_CAMERA_ZOOM := 0.85
 
 @onready var _world: Node2D = $World
 @onready var _map: WorldMapView = $World/WorldMap
@@ -14,13 +14,15 @@ const AIRPORT_CAMERA_ZOOM := 0.62
 @onready var _hud: Hud = $UI/Hud
 
 var db := GameDB.new()
+var sim: Simulation
 
 enum View { WORLD, AIRPORT }
 
 var _view: View = View.WORLD
 var _transition: ViewTransition
 var _airport_view: AirportView
-var _airport_camera: Camera2D
+var _airport_camera: AirportCamera
+var _airport_hud: AirportHud
 var _busy := false
 ## Where the world camera was before diving into an airport, so backing out
 ## restores the exact view the player left.
@@ -31,10 +33,16 @@ func _ready() -> void:
     db.load_all()
     _report_data_problems()
 
+    sim = Simulation.new(db)
+    if not sim.load_game():
+        sim.new_game()
+    sim.money_changed.connect(_on_money_changed)
+
     _transition = ViewTransition.new()
     add_child(_transition)
 
     _map.bind_camera(_camera)
+    _hud.bind_sim(sim)
     _overlay.bind(db, _camera)
     _hud.bind(db)
 
@@ -49,7 +57,15 @@ func _ready() -> void:
     # ocean, so a new player starts looking at their own operation.
     _camera.focus_on(_airport_world_position("apt_bzn"), 2)
     _update_zoom_readout()
+    _on_money_changed(sim.state.money)
     print("Pixel Skies ready — %d airports, %d aircraft families." % [db.airports.size(), db.aircraft.size()])
+
+func _process(_delta: float) -> void:
+    # Timestamps do the work; this only notices when a boundary has been passed.
+    sim.tick()
+
+func _on_money_changed(amount: int) -> void:
+    _hud.set_money(amount)
 
 func _report_data_problems() -> void:
     if not OS.is_debug_build():
@@ -113,16 +129,27 @@ func enter_airport(airport_id: String) -> void:
     _world.visible = false
     _airport_view = AirportView.new()
     _airport_view.setup(db.airports[airport_id], layout)
+    _airport_view.bind_sim(sim)
     add_child(_airport_view)
 
-    _airport_camera = Camera2D.new()
-    _airport_camera.zoom = Vector2.ONE * AIRPORT_CAMERA_ZOOM
+    _airport_camera = AirportCamera.new()
     _airport_view.add_child(_airport_camera)
+    # Frame the apron rather than the geometric centre of the field: loading and
+    # departures are what the player came here to watch.
+    _airport_camera.frame(_airport_view.bounds(), _airport_view.apron_centre(), AIRPORT_CAMERA_ZOOM)
     _airport_camera.make_current()
+
+    _airport_hud = AirportHud.new()
+    $UI.add_child(_airport_hud)
+    _airport_hud.bind(sim, airport_id)
+    _airport_hud.dispatch_completed.connect(_on_dispatch_completed)
+    _airport_view.aircraft_clicked.connect(_airport_hud.select_aircraft)
+    if not _airport_hud.selected_aircraft_id.is_empty():
+        _airport_view.selected_aircraft_id = _airport_hud.selected_aircraft_id
 
     _view = View.AIRPORT
     _hud.set_zoom_readout(AIRPORT_CAMERA_ZOOM, "airport")
-    _hud.show_airport(airport_id)
+    _hud.clear_airport()
     await _transition.uncover()
     _busy = false
 
@@ -132,6 +159,9 @@ func exit_airport() -> void:
     _busy = true
     await _transition.cover()
 
+    if _airport_hud != null:
+        _airport_hud.queue_free()
+        _airport_hud = null
     if _airport_view != null:
         _airport_view.queue_free()
         _airport_view = null
@@ -146,6 +176,11 @@ func exit_airport() -> void:
     _update_zoom_readout()
     await _transition.uncover()
     _busy = false
+
+## A departure is the moment the airline does something, so the view follows it
+## out to the world map rather than leaving the player staring at an empty stand.
+func _on_dispatch_completed(_flight_id: String) -> void:
+    _airport_view.queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):

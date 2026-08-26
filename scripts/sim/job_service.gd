@@ -111,7 +111,9 @@ func _pick_destination(origin: Dictionary) -> Dictionary:
             continue
         var weight: float = 0.4 + float(candidate.get("passenger_demand", 0.5))
         if String(candidate.get("tier", "")) == "major":
-            weight *= 1.5
+            # Big markets pull harder, but only a little: a board that is five
+            # rows of the same city gives the player nothing to choose between.
+            weight *= 1.15
         entries.append({"airport": candidate, "weight": weight})
         total += weight
     if total <= 0.0:
