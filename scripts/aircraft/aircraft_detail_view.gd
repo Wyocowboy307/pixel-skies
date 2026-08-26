@@ -319,9 +319,17 @@ func _column_backing(at: Vector2, height: float) -> void:
     draw_rect(Rect2(Vector2(rect.position.x, rect.end.y - 1.0), Vector2(rect.size.x, 1.0)),
         _colour("ui_border"))
 
-func _column(at: Vector2, title: String) -> void:
+## A labelled column heading with its icon. The icon carries the meaning at a
+## glance; the word confirms it.
+func _column(at: Vector2, title: String, icon: String = "") -> void:
     draw_rect(Rect2(at, Vector2(COLUMN_WIDTH, 1.0)), _colour("ui_border"))
-    _text(at + Vector2(2.0, 10.0), title, "text_dim")
+    var text_x := 2.0
+    if not icon.is_empty():
+        var texture: Texture2D = _texture("res://assets/art/ui/icons/%s.png" % icon)
+        if texture != null:
+            draw_texture(texture, (at + Vector2(1.0, 3.0)).round())
+            text_x = 13.0
+    _text(at + Vector2(text_x, 11.0), title, "text_dim")
 
 ## Range on the left, condition and logbook on the right — attached to the
 ## aircraft rather than stacked in a table.
@@ -332,7 +340,7 @@ func _draw_gauges(plane: AircraftInstance) -> void:
     # labels were being read against passing clouds.
     _column_backing(left, 132.0)
     _column_backing(Vector2(size.x - COLUMN_WIDTH - 8.0, 52.0), 132.0)
-    _column(left, "RANGE")
+    _column(left, "RANGE", "range")
     _text(left + Vector2(2.0, 22.0), "%d NM" % int(family.get("range_nm", 0)), "accent_teal")
 
     # With a route chosen the bar shows how much of the range it eats, which is
@@ -348,25 +356,25 @@ func _draw_gauges(plane: AircraftInstance) -> void:
     else:
         _text(left + Vector2(2.0, 46.0), "FULL RANGE", "text_dim")
 
-    _column(left + Vector2(0.0, 60.0), "RUNWAY")
+    _column(left + Vector2(0.0, 60.0), "RUNWAY", "runway")
     _text(left + Vector2(2.0, 82.0),
         Rules.band_name(int(family.get("runway_band_required", 1))).to_upper(), "text")
-    _column(left + Vector2(0.0, 96.0), "HOME")
+    _column(left + Vector2(0.0, 96.0), "HOME", "route")
     var home: Dictionary = sim.db.airports.get(plane.home_base_id, {})
     _text(left + Vector2(2.0, 118.0), String(home.get("code", "—")), "text")
 
     var right := Vector2(size.x - COLUMN_WIDTH - 8.0, 52.0)
-    _column(right, "CONDITION")
+    _column(right, "CONDITION", "condition")
     var condition: float = plane.condition
     _bar(right + Vector2(2.0, 16.0), Vector2(COLUMN_WIDTH - 6.0, 5.0), condition,
         "accent_green" if condition > 0.6 else "accent_yellow")
     _text(right + Vector2(2.0, 34.0), "%d%%" % roundi(condition * 100.0), "text")
 
     # The logbook is what makes an old airframe worth keeping.
-    _column(right + Vector2(0.0, 48.0), "LOGBOOK")
+    _column(right + Vector2(0.0, 48.0), "LOGBOOK", "clock")
     _text(right + Vector2(2.0, 70.0), "%d LEGS" % plane.legs, "text")
     _text(right + Vector2(2.0, 82.0), "%.0f HRS" % plane.hours, "text_dim")
-    _column(right + Vector2(0.0, 96.0), "EARNED")
+    _column(right + Vector2(0.0, 96.0), "EARNED", "money")
     _text(right + Vector2(2.0, 118.0), UiTheme.money(plane.lifetime_revenue), "accent_orange")
 
 func _bar(at: Vector2, bar_size: Vector2, fraction: float, colour_key: String) -> void:
@@ -419,8 +427,14 @@ func _draw_bay(at: Vector2, title: String, capacity: int, jobs: Array[Job],
     var used := 0
     for job: Job in jobs:
         used += job.seats if is_cabin else job.cargo_units
-    _text(at, title, "text_dim")
-    _text(at + Vector2(38.0, 0.0), "%d/%d" % [used, capacity],
+    var icon: Texture2D = _texture("res://assets/art/ui/icons/%s.png" %
+        ("passenger" if is_cabin else "cargo"))
+    var label_x := 0.0
+    if icon != null:
+        draw_texture(icon, (at + Vector2(0.0, -8.0)).round())
+        label_x = 12.0
+    _text(at + Vector2(label_x, 0.0), title, "text_dim")
+    _text(at + Vector2(label_x + 38.0, 0.0), "%d/%d" % [used, capacity],
         "accent_green" if used > 0 else "text_dim")
 
     var cursor: Vector2 = at + Vector2(0.0, 6.0)
@@ -454,13 +468,13 @@ func _draw_slot(at: Vector2, slot: Vector2, job: Job, is_cabin: bool, colour_ind
     draw_rect(Rect2(at + Vector2(0.0, slot.y - 1.0), Vector2(slot.x, 1.0)),
         _colour("ui_border" if filled else "ui_bg_light"))
     if not filled:
-        # An empty slot still reads as a seat or a pallet space waiting to be
-        # filled, rather than as blank background.
-        var mark: Color = _colour("ui_border")
+        # An empty slot shows the seat or pallet waiting to be filled, rather
+        # than reading as blank background.
         draw_rect(Rect2(at, slot), _colour("ui_bg"))
-        for edge_x in [at.x, at.x + slot.x - 1.0]:
-            draw_rect(Rect2(Vector2(edge_x, at.y + 2.0), Vector2(1.0, slot.y - 4.0)), mark)
-        draw_rect(Rect2(at + Vector2(4.0, roundf(slot.y * 0.55)), Vector2(slot.x - 8.0, 1.0)), mark)
+        var empty: Texture2D = _texture("res://assets/art/ui/icons/%s.png" %
+            ("seat_slot" if is_cabin else "cargo_slot"))
+        if empty != null:
+            draw_texture(empty, (at + ((slot - empty.get_size()) * 0.5)).round())
         return
     var path := ""
     if is_cabin:

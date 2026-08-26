@@ -153,6 +153,16 @@ The metric spec still governs the top view. The two views agree on everything
 that carries identity — wing position, engine count and layout, gear type,
 livery — which is what keeps them the same aircraft.
 
+**Silhouette must carry the family, not size alone.** Three aircraft that differ
+only in scale read as one aircraft in three sizes. Each family therefore owns a
+structural cue visible in both views and in the 15px map icon:
+
+| family | cue |
+| --- | --- |
+| Trailhopper 4 | nose-high tail-dragger stance, single nose propeller, strutted high wing |
+| Twinwing 8 | low wing, engines slung under it, level tricycle stance |
+| Highline 19 | **T-tail**, high wing with over-wing engines, long cabin |
+
 Nose points **east (+x)**. The main gear contact point sits on a consistent
 baseline so every aircraft lines up in the detail view.
 

@@ -156,68 +156,182 @@ def _roofed_block(width: int, height: int, roof: str, seed: int,
     return canvas
 
 
-def terminal(width: int = 96, height: int = 32) -> Canvas:
-    canvas = _roofed_block(width, height, "roof_terminal", seed=8100, ribs=3)
-    # Glazed frontage facing the apron, plus rooftop plant.
-    canvas.rect(4, height - 4, width - 8, 2, "glass")
-    canvas.hline(4, width - 5, height - 4, "glass_light")
-    canvas.rect(width - 22, 4, 10, 6, "roof_hangar")
-    canvas.hline(width - 22, width - 13, 4, "metal_light")
+def terminal(width: int = 96, height: int = 32, level: int = 1) -> Canvas:
+    """Passenger terminal, seen flat-lay with a short south face.
+
+    The glazed frontage, entrance canopy and rooftop plant are what separate a
+    terminal from any other shed at a glance.
+    """
+    canvas = _roofed_block(width, height, "roof_terminal", seed=8100, ribs=0)
+    # Roof ribs suggesting the structural bays.
+    for x in range(8, width - 6, 12):
+        canvas.vline(x, 2, height - 3, "wall")
+        canvas.vline(x + 1, 2, height - 3, "wall_light")
+    # Glazed frontage facing the apron.
+    canvas.rect(3, height - 5, width - 6, 3, "glass")
+    canvas.hline(3, width - 4, height - 5, "glass_light")
+    for x in range(5, width - 4, 7):
+        canvas.vline(x, height - 5, height - 3, "wall")
+    # Entrance canopy, centred.
+    canopy = max(12, width // 5)
+    cx = (width - canopy) // 2
+    canvas.rect(cx, height - 2, canopy, 4, "wall_light")
+    canvas.hline(cx, cx + canopy - 1, height + 1, "wall")
+    # Rooftop plant, more of it on a bigger terminal.
+    for unit in range(1 + level):
+        ux = 6 + unit * 16
+        if ux + 10 > width - 6:
+            break
+        canvas.rect(ux, 4, 10, 6, "roof_hangar")
+        canvas.hline(ux, ux + 9, 4, "metal_light")
+        canvas.hline(ux, ux + 9, 9, "metal_dark")
     canvas.outline()
     return canvas
 
 
 def hangar(width: int = 64, height: int = 34) -> Canvas:
+    """Arched-roof hangar with a full-width door on the apron side."""
     canvas = _roofed_block(width, height, "roof_hangar", seed=8200, ribs=0)
-    # Arched roof read as three bands, and the big door on the apron side.
-    canvas.rect(2, 2, width - 4, 4, "metal_light")
-    canvas.rect(2, height - 10, width - 4, 6, "wall")
-    canvas.rect(6, height - 4, width - 12, 3, "asphalt_dark")
-    for x in range(8, width - 8, 6):
-        canvas.vline(x, height - 3, height - 2, "metal_dark")
+    # Barrel roof read as three bands plus corrugation.
+    canvas.rect(2, 2, width - 4, 5, "metal_light")
+    canvas.rect(2, height - 12, width - 4, 5, "wall")
+    for x in range(4, width - 3, 3):
+        canvas.vline(x, 8, height - 13, "wall")
+    # Sliding door with panel divisions.
+    canvas.rect(4, height - 6, width - 8, 5, "asphalt_dark")
+    for x in range(8, width - 6, 8):
+        canvas.vline(x, height - 6, height - 2, "metal_dark")
+    canvas.hline(4, width - 5, height - 6, "metal")
     canvas.outline()
     return canvas
 
 
 def cargo_shed(width: int = 48, height: int = 28) -> Canvas:
-    canvas = _roofed_block(width, height, "roof_cargo", seed=8300, ribs=2)
-    canvas.rect(4, height - 5, width - 8, 3, "asphalt_dark")
+    """Freight shed: roller doors and a loading apron edge."""
+    canvas = _roofed_block(width, height, "roof_cargo", seed=8300, ribs=0)
+    for x in range(6, width - 4, 10):
+        canvas.vline(x, 2, height - 8, "wall")
+    # Two roller doors with a dock strip in front.
+    for door in range(2):
+        dx = 5 + door * (width // 2 - 2)
+        dw = width // 2 - 10
+        if dx + dw > width - 4:
+            break
+        canvas.rect(dx, height - 7, dw, 6, "asphalt_dark")
+        for y in range(height - 7, height - 2, 2):
+            canvas.hline(dx, dx + dw - 1, y, "wall")
+        canvas.hline(dx, dx + dw - 1, height - 7, "accent_yellow")
     canvas.outline()
     return canvas
 
 
-def tower(width: int = 20, height: int = 20) -> Canvas:
+def tower(width: int = 20, height: int = 26) -> Canvas:
+    """Control tower: a glazed cab on a shaft, with a mast."""
     canvas = Canvas(width, height + 4)
-    canvas.rect(3, 6, width - 6, height - 6, "wall")
-    canvas.rect(1, 0, width - 2, 8, "roof_hangar")
-    # Glazed cab — the one thing that says "control tower" from above.
-    canvas.rect(2, 1, width - 4, 4, "glass")
-    canvas.hline(2, width - 3, 1, "glass_light")
-    canvas.hline(1, width - 2, 0, "metal_light")
-    canvas.rect(3, height - 2, width - 6, 4, "wall")
+    shaft = width // 2
+    sx = (width - shaft) // 2
+    canvas.rect(sx, 9, shaft, height - 9, "wall")
+    canvas.vline(sx, 9, height - 1, "wall_light")
+    # Cab, wider than the shaft and fully glazed.
+    canvas.rect(0, 1, width, 9, "roof_hangar")
+    canvas.rect(1, 3, width - 2, 4, "glass")
+    canvas.hline(1, width - 2, 3, "glass_light")
+    for x in range(3, width - 2, 4):
+        canvas.vline(x, 3, 6, "metal_dark")
+    canvas.hline(0, width - 1, 1, "metal_light")
+    canvas.hline(0, width - 1, 9, "metal_dark")
+    # Mast with a beacon.
+    canvas.vline(width // 2, 0, 1, "metal")
+    canvas.plot(width // 2, 0, "accent_red")
+    canvas.rect(sx - 2, height, shaft + 4, 4, "concrete")
     canvas.outline()
     return canvas
 
 
-def fuel_depot(width: int = 28, height: int = 20) -> Canvas:
+def fuel_depot(width: int = 32, height: int = 22) -> Canvas:
+    """Fuel farm: two tanks on a bunded pad with a pipe run."""
     canvas = Canvas(width, height)
-    canvas.rect(0, 4, width, height - 6, "concrete")
-    for i, cx in enumerate((8, 20)):
-        canvas.ellipse(cx, 11, 6, 5, "metal")
-        canvas.ellipse(cx, 9, 5, 3, "metal_light")
-        canvas.hline(cx - 5, cx + 4, 15, "metal_dark")
+    canvas.rect(0, 3, width, height - 5, "concrete")
+    canvas.rect_outline(0, 3, width, height - 5, "accent_yellow")
+    for index, cx in enumerate((9, 23)):
+        canvas.ellipse(cx, 11, 7, 6, "metal")
+        canvas.ellipse(cx, 9, 6, 4, "metal_light")
+        canvas.ring(cx, 11, 6, "metal_dark")
+        # Ladder up the side.
+        canvas.vline(cx + 6, 8, 14, "metal_dark")
+    # Pipe joining the tanks.
+    canvas.hline(9, 23, 17, "metal_dark")
+    canvas.plot(16, 17, "accent_red")
     canvas.outline()
+    return canvas
+
+
+def windsock(width: int = 14, height: int = 16) -> Canvas:
+    """Windsock on a pole — the cheapest possible sign that an airfield is live."""
+    canvas = Canvas(width, height)
+    canvas.vline(2, 2, height - 1, "metal")
+    canvas.plot(2, 2, "metal_light")
+    # Cone, striped, streaming to the east.
+    for i in range(9):
+        top = 3 + i // 4
+        bottom = 7 - i // 3
+        colour = "accent_orange" if (i // 2) % 2 == 0 else "white"
+        canvas.vline(4 + i, top, bottom, colour)
+    canvas.outline()
+    return canvas
+
+
+def apron_light(width: int = 10, height: int = 18) -> Canvas:
+    """Floodlight mast for the apron."""
+    canvas = Canvas(width, height)
+    canvas.vline(width // 2, 4, height - 1, "metal")
+    canvas.vline(width // 2 + 1, 6, height - 1, "metal_dark")
+    canvas.rect(1, 1, width - 2, 4, "metal_dark")
+    canvas.hline(1, width - 2, 2, "accent_yellow")
+    canvas.hline(1, width - 2, 1, "metal_light")
+    canvas.outline()
+    return canvas
+
+
+def runway_sign(width: int = 16, height: int = 10) -> Canvas:
+    """Mandatory-instruction sign at a taxiway hold."""
+    canvas = Canvas(width, height)
+    canvas.rect(0, 1, width, height - 4, "accent_red")
+    canvas.rect_outline(0, 1, width, height - 4, "white")
+    canvas.hline(4, 6, 4, "white")
+    canvas.hline(9, 11, 4, "white")
+    canvas.hline(0, width - 1, height - 3, "metal_dark")
+    canvas.outline()
+    return canvas
+
+
+def fence(width: int = 32, height: int = 8) -> Canvas:
+    """Perimeter fence run, tileable horizontally."""
+    canvas = Canvas(width, height)
+    canvas.hline(0, width - 1, 1, "metal")
+    canvas.hline(0, width - 1, 4, "metal_dark")
+    for x in range(0, width, 8):
+        canvas.vline(x, 0, height - 2, "metal")
+        canvas.plot(x, 0, "metal_light")
     return canvas
 
 
 BUILDINGS: dict[str, callable] = {
-    "terminal_1": lambda: terminal(80, 28),
-    "terminal_2": lambda: terminal(112, 34),
-    "terminal_3": lambda: terminal(160, 42),
+    "terminal_1": lambda: terminal(80, 28, level=1),
+    "terminal_2": lambda: terminal(112, 34, level=2),
+    "terminal_3": lambda: terminal(160, 42, level=3),
     "hangar_small": lambda: hangar(56, 30),
     "cargo_shed": lambda: cargo_shed(48, 26),
-    "tower": lambda: tower(20, 20),
-    "fuel_depot": lambda: fuel_depot(28, 20),
+    "tower": lambda: tower(20, 26),
+    "fuel_depot": lambda: fuel_depot(32, 22),
+}
+
+## Small props that make a field look operated rather than drawn.
+PROPS: dict[str, callable] = {
+    "windsock": windsock,
+    "apron_light": apron_light,
+    "runway_sign": runway_sign,
+    "fence": fence,
 }
 
 
@@ -225,17 +339,27 @@ BUILDINGS: dict[str, callable] = {
 # Vehicles and people
 # ---------------------------------------------------------------------------
 
-def _vehicle(body: str, roof: str, length: int = 14, width: int = 8) -> Canvas:
-    """Top-down vehicle, nose east to match the aircraft convention."""
+def _vehicle(body: str, roof: str, length: int = 14, width: int = 8,
+             beacon: bool = False, tank: bool = False) -> Canvas:
+    """Top-down ground vehicle, nose east to match the aircraft convention."""
     canvas = Canvas(16, 16)
     x0 = (16 - length) // 2
     y0 = (16 - width) // 2
     canvas.rect(x0, y0, length, width, body)
     canvas.hline(x0, x0 + length - 1, y0, "metal_light")
     canvas.hline(x0, x0 + length - 1, y0 + width - 1, "metal_dark")
-    canvas.rect(x0 + length - 6, y0 + 1, 4, width - 2, roof)
+    # Cab with a windscreen, at the nose end.
+    cab = 4
+    canvas.rect(x0 + length - cab - 1, y0 + 1, cab, width - 2, roof)
+    canvas.vline(x0 + length - 2, y0 + 1, y0 + width - 2, "glass_light")
+    if tank:
+        canvas.rect(x0 + 1, y0 + 1, length - cab - 3, width - 2, "metal")
+        canvas.hline(x0 + 1, x0 + length - cab - 3, y0 + 1, "metal_light")
+        canvas.hline(x0 + 1, x0 + length - cab - 3, y0 + width - 2, "metal_dark")
+    if beacon:
+        canvas.plot(x0 + length - cab - 1, y0 + width // 2, "accent_orange_light")
     # Wheels poking out on both sides.
-    for wx in (x0 + 2, x0 + length - 4):
+    for wx in (x0 + 1, x0 + length - 4):
         canvas.hline(wx, wx + 1, y0 - 1, "asphalt_dark")
         canvas.hline(wx, wx + 1, y0 + width, "asphalt_dark")
     canvas.outline()
@@ -243,8 +367,8 @@ def _vehicle(body: str, roof: str, length: int = 14, width: int = 8) -> Canvas:
 
 
 VEHICLES: dict[str, callable] = {
-    "tug": lambda: _vehicle("accent_yellow", "glass", 11, 7),
-    "fuel_truck": lambda: _vehicle("metal", "glass", 14, 8),
+    "tug": lambda: _vehicle("accent_yellow", "wall", 11, 7, beacon=True),
+    "fuel_truck": lambda: _vehicle("wall", "wall_light", 15, 8, tank=True),
     "baggage_cart": lambda: _vehicle("accent_teal", "roof_cargo", 12, 7),
 }
 

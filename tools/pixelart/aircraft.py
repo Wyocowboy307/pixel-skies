@@ -46,6 +46,9 @@ class AircraftSpec:
     canvas_side: tuple[int, int]
     livery: str = "house"
     struts: bool = False
+    ## A T-tail puts the tailplane on top of the fin. It is the single strongest
+    ## silhouette cue available at this sprite size, so only one family has one.
+    t_tail: bool = False
 
 
 SPECS: dict[str, AircraftSpec] = {
@@ -78,7 +81,7 @@ SPECS: dict[str, AircraftSpec] = {
         tail_span_m=6.9, tail_chord_m=1.9, fin_height_m=2.3,
         prop_diameter_m=2.6, engines=2, wing_engines=True, engine_span_frac=0.30,
         cabin_windows=7, gear="tricycle", gear_height_m=1.0,
-        canvas_top=96, canvas_side=(240, 88),
+        canvas_top=96, canvas_side=(240, 88), t_tail=True,
     ),
 }
 
@@ -193,6 +196,10 @@ def _top_tail(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
     half_span = max(2, round(spec.tail_span_m * ppm * 0.5))
     chord = max(2, round(spec.tail_chord_m * ppm))
     leading = tail + chord + max(1, round(ctx["length"] * 0.04))
+    if spec.t_tail:
+        # Sitting on the fin, the tailplane is further aft and reads wider.
+        half_span = round(half_span * 1.15)
+        leading = tail + chord
     for dy in range(0, half_span + 1):
         t = dy / max(1, half_span)
         tip_chord = max(2, round(chord * (1.0 - 0.28 * t)))
@@ -322,6 +329,10 @@ class SideStyle:
     gear_height: int
     wheel_radius: int
     prop_radius: int
+    ## Nose-up stance, in pixels of drop at the tail. A tail-dragger sitting
+    ## nose-high is instantly readable as a bush aircraft, and it is what stops
+    ## the three families reading as one shape in three sizes.
+    rake: int = 0
 
 
 SIDE_STYLES: dict[str, SideStyle] = {
@@ -337,7 +348,8 @@ SIDE_STYLES: dict[str, SideStyle] = {
         canvas=(208, 120), body_length=150, body_height=58,
         nose_start=0.84, tail_end=0.40, tail_keep=0.30,
         fin_height=38, fin_root=42, windows=3, window_size=12,
-        wing_chord=42, wing_x=0.40, gear_height=18, wheel_radius=9, prop_radius=26,
+        wing_chord=42, wing_x=0.40, gear_height=18, wheel_radius=11, prop_radius=26,
+        rake=11,
     ),
     # Medium: longer body, same chunk. 2.9:1.
     "twinwing_8": SideStyle(
@@ -370,8 +382,10 @@ def _capsule(style: SideStyle, body_top: int, belly: int) -> list[tuple[int, int
     height = float(belly - body_top)
     for i in range(style.body_length):
         t = i / float(style.body_length - 1)     # 0 at tail, 1 at nose
-        top = float(body_top)
-        bottom = float(belly)
+        # Rake drops the tail toward the ground, tipping the nose up.
+        lift = style.rake * (1.0 - t)
+        top = float(body_top) + lift
+        bottom = float(belly) + lift
         if t >= style.nose_start:
             run = (t - style.nose_start) / max(1e-6, 1.0 - style.nose_start)
             # Circular falloff: fat almost all the way forward, then a quick round.
@@ -381,7 +395,7 @@ def _capsule(style: SideStyle, body_top: int, belly: int) -> list[tuple[int, int
         elif t <= style.tail_end:
             run = 1.0 - t / max(1e-6, style.tail_end)
             keep = 1.0 - (1.0 - style.tail_keep) * run
-            centre = (body_top + belly) * 0.5 - height * 0.16 * run
+            centre = (body_top + belly) * 0.5 + lift - height * 0.16 * run
             top = centre - height * keep * 0.5
             bottom = centre + height * keep * 0.5
         profile.append((int(round(top)), int(round(bottom))))
@@ -514,15 +528,18 @@ def _side_tail(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
     tail = ctx["tail"]
     body_top = ctx["body_top"]
     root = style.fin_root
+    # Anchored to the raked tail so the fin does not float when the nose lifts.
+    body_top = body_top + int(round(style.rake))
     top_y = body_top - style.fin_height
 
     for x in range(tail, tail + root + 1):
         # 0 at the leading edge (nearest the nose), 1 at the trailing edge.
         run = (tail + root - x) / float(max(1, root))
-        rise = min(1.0, run / 0.72)
+        rise = min(1.0, run / (0.52 if spec.t_tail else 0.72))
         y_top = int(round(body_top - style.fin_height * rise))
-        # Round the very top of the fin over the last couple of columns.
-        if run > 0.86:
+        # Round the very top, except on a T-tail where the plateau carries the
+        # tailplane and must stay flat.
+        if run > 0.86 and not spec.t_tail:
             y_top += int(round((run - 0.86) / 0.14 * 2.0))
         _, bottom = _station(ctx, min(x, ctx["nose"]))
         y_bottom = min(body_top + 3, bottom)
@@ -538,12 +555,24 @@ def _side_tail(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
         canvas.plot(x, y, livery["trim"])
         canvas.plot(x, y + 1, livery["trim"])
 
-    # Tailplane, edge-on and chunky, sitting at the base of the fin.
+    # Tailplane, edge-on and chunky. On a T-tail it rides on top of the fin,
+    # which reads at a glance even in a 15px map icon.
     plane_len = max(6, root - 3)
-    for x in range(tail + 1, tail + plane_len):
-        canvas.plot(x, body_top + 1, livery["light"])
-        canvas.plot(x, body_top + 2, livery["base"])
-        canvas.plot(x, body_top + 3, livery["dark"])
+    if spec.t_tail:
+        # Sits across the fin plateau with a short overhang either side, so it
+        # reads as mounted on the fin rather than hovering above it.
+        plane_y = top_y
+        plateau_end = tail + int(round(root * 0.56))
+        for x in range(tail - 3, plateau_end + 4):
+            canvas.plot(x, plane_y, livery["light"])
+            canvas.plot(x, plane_y + 1, livery["base"])
+            canvas.plot(x, plane_y + 2, livery["dark"])
+    else:
+        for x in range(tail + 1, tail + plane_len):
+            base_y = body_top + int(round(style.rake))
+            canvas.plot(x, base_y + 1, livery["light"])
+            canvas.plot(x, base_y + 2, livery["base"])
+            canvas.plot(x, base_y + 3, livery["dark"])
 
 
 def _side_glass(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
@@ -604,8 +633,8 @@ def _side_engines(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
         centre = (ctx["body_top"] - wing_thickness // 2 if spec.high_wing
                   else ctx["belly"] - wing_thickness // 2 - 1)
         half = max(3, style.body_height // 7)
-        back = leading - int(round(chord * 0.30))
-        front = leading + int(round(chord * 0.62))
+        back = leading - int(round(chord * 0.18))
+        front = leading + int(round(chord * 0.50))
         for x in range(back, front + 1):
             run = (front - x) / float(max(1, front - back))
             rows = half if run > 0.16 else max(1, half - 1)     # rounded front

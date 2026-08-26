@@ -154,6 +154,118 @@ def icon_warning() -> Canvas:
     return canvas
 
 
+def icon_fuel() -> Canvas:
+    """A jerrycan — reads as fuel at 10px where a droplet does not."""
+    canvas = Canvas(10, 10)
+    canvas.rect(1, 2, 7, 7, "accent_teal")
+    canvas.hline(1, 7, 2, "ice")
+    canvas.vline(1, 2, 8, "ice")
+    canvas.rect(3, 0, 3, 2, "metal_dark")
+    canvas.vline(8, 3, 6, "metal")
+    canvas.outline()
+    return canvas
+
+
+def icon_range() -> Canvas:
+    """A double-headed arrow between two posts. At 10px the arrowheads have to
+    be solid triangles; single-pixel barbs read as noise."""
+    canvas = Canvas(10, 10)
+    canvas.vline(0, 1, 8, "metal_light")
+    canvas.vline(9, 1, 8, "metal_light")
+    canvas.hline(2, 7, 5, "accent_teal")
+    for i in range(3):
+        canvas.vline(2 + i, 5 - (2 - i), 5 + (2 - i), "accent_teal")
+        canvas.vline(7 - i, 5 - (2 - i), 5 + (2 - i), "accent_teal")
+    canvas.outline()
+    return canvas
+
+
+def icon_route() -> Canvas:
+    """Two airport dots joined by a dashed hop, which is exactly how a route
+    is drawn on the world map — so the icon teaches the map."""
+    canvas = Canvas(10, 10)
+    canvas.rect(0, 7, 3, 3, "accent_orange")
+    canvas.rect(7, 0, 3, 3, "accent_orange_light")
+    for x, y in ((3, 6), (4, 5), (6, 3), (7, 2)):
+        canvas.plot(x, y, "white")
+    canvas.outline()
+    return canvas
+
+
+def icon_condition() -> Canvas:
+    """A spanner: a thick diagonal shaft with an open jaw. A thin outline
+    spanner is unreadable at this size, so it is drawn as solid mass."""
+    canvas = Canvas(10, 10)
+    for i in range(6):
+        canvas.plot(2 + i, 7 - i, "metal")
+        canvas.plot(3 + i, 7 - i, "metal_light")
+    # Open jaw at the top right.
+    canvas.rect(6, 0, 4, 4, "metal_light")
+    canvas.plot(7, 0, "ui_bg")
+    canvas.plot(7, 1, "ui_bg")
+    canvas.plot(8, 0, "ui_bg")
+    canvas.outline()
+    return canvas
+
+
+def icon_seat_slot() -> Canvas:
+    """An empty seat in side profile: a chunky backrest, cushion and leg."""
+    canvas = Canvas(10, 10)
+    canvas.rect(1, 1, 3, 6, "ui_border_light")     # backrest
+    canvas.rect(1, 6, 8, 2, "ui_border_light")     # cushion
+    canvas.vline(8, 8, 9, "ui_border")             # leg
+    canvas.vline(1, 8, 9, "ui_border")
+    canvas.hline(1, 3, 1, "text_dim")
+    canvas.outline()
+    return canvas
+
+
+def icon_cargo_slot() -> Canvas:
+    """An empty pallet space."""
+    canvas = Canvas(10, 10)
+    canvas.rect_outline(1, 3, 8, 6, "ui_border_light")
+    canvas.hline(2, 7, 8, "text_dim")
+    canvas.outline()
+    return canvas
+
+
+def icon_upgrade() -> Canvas:
+    """A building with an up arrow: an airport upgrade."""
+    canvas = Canvas(10, 10)
+    canvas.rect(0, 5, 6, 5, "roof_terminal")
+    canvas.hline(0, 5, 5, "wall_light")
+    canvas.rect(1, 7, 2, 2, "glass")
+    for i in range(3):
+        canvas.hline(6 - i, 8 + i, 4 - i, "accent_green")
+    canvas.vline(7, 2, 4, "accent_green")
+    canvas.outline()
+    return canvas
+
+
+def icon_speed() -> Canvas:
+    """A gauge needle, for cruise speed."""
+    canvas = Canvas(10, 10)
+    canvas.ring(4, 5, 4, "ui_border_light")
+    for x, y in ((4, 5), (5, 4), (6, 3), (7, 3)):
+        canvas.plot(x, y, "accent_orange")
+    canvas.plot(4, 5, "white")
+    canvas.outline()
+    return canvas
+
+
+def icon_runway() -> Canvas:
+    """A strip with a dashed centreline."""
+    canvas = Canvas(10, 10)
+    canvas.rect(1, 1, 8, 8, "asphalt")
+    canvas.vline(1, 1, 8, "white")
+    canvas.vline(8, 1, 8, "white")
+    for y in (2, 5, 8):
+        canvas.plot(4, y, "white")
+        canvas.plot(5, y, "white")
+    canvas.outline()
+    return canvas
+
+
 ICONS: dict[str, callable] = {
     "passenger": icon_passenger,
     "cargo": icon_cargo,
@@ -162,6 +274,15 @@ ICONS: dict[str, callable] = {
     "clock": icon_clock,
     "plane": icon_plane,
     "warning": icon_warning,
+    "fuel": icon_fuel,
+    "range": icon_range,
+    "route": icon_route,
+    "condition": icon_condition,
+    "seat_slot": icon_seat_slot,
+    "cargo_slot": icon_cargo_slot,
+    "upgrade": icon_upgrade,
+    "speed": icon_speed,
+    "runway": icon_runway,
 }
 
 

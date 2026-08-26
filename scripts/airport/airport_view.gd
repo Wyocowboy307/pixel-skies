@@ -14,6 +14,7 @@ const TILE := 16
 const TILES := "res://assets/art/airports/tiles/%s.png"
 const BUILDINGS := "res://assets/art/airports/buildings/%s.png"
 const VEHICLES := "res://assets/art/airports/vehicles/%s.png"
+const PROPS := "res://assets/art/airports/props/%s.png"
 
 var airport_id := ""
 var layout: Dictionary = {}
@@ -180,6 +181,7 @@ func _draw() -> void:
     _draw_apron()
     _draw_stands()
     _draw_buildings()
+    _draw_props()
     _draw_service_vehicles()
     _draw_parked_aircraft()
 
@@ -372,6 +374,27 @@ func _blit_building(sprite_name: String, at: Vector2) -> void:
         return
     var size: Vector2 = texture.get_size()
     draw_texture(texture, (at - size * 0.5).round())
+
+## Windsocks, signs, floodlights and the perimeter fence. None of these do
+## anything mechanically; they are what makes the field read as operated rather
+## than as a diagram of an airport.
+func _draw_props() -> void:
+    var fence: Dictionary = layout.get("fence", {}) if layout.get("fence") != null else {}
+    if not fence.is_empty():
+        var texture: Texture2D = _sprite(PROPS % "fence")
+        if texture != null:
+            var y: float = float(fence.get("y", 0))
+            var x0: float = float(fence.get("x0", 0))
+            var x1: float = float(fence.get("x1", 0))
+            draw_texture_rect(texture, Rect2(Vector2(x0, y), Vector2(x1 - x0, texture.get_size().y)), true)
+    for entry: Variant in layout.get("props", []):
+        var prop: Dictionary = entry
+        var sprite: Texture2D = _sprite(PROPS % String(prop.get("sprite", "")))
+        if sprite == null:
+            continue
+        var at: Vector2 = _vec(prop.get("position", [0, 0]))
+        # Props stand on their base, so they are anchored bottom-centre.
+        draw_texture(sprite, (at - Vector2(sprite.get_size().x * 0.5, sprite.get_size().y)).round())
 
 func _draw_service_vehicles() -> void:
     for entry: Variant in layout.get("service_points", []):

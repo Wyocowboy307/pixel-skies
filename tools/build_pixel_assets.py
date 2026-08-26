@@ -57,7 +57,10 @@ def build_vehicles() -> int:
     folder = ART / "airports" / "vehicles"
     for name, factory in scenery.VEHICLES.items():
         factory().save(folder / f"{name}.png", name)
-    return len(scenery.VEHICLES)
+    props = ART / "airports" / "props"
+    for name, factory in scenery.PROPS.items():
+        factory().save(props / f"{name}.png", name)
+    return len(scenery.VEHICLES) + len(scenery.PROPS)
 
 
 def build_people_and_cargo() -> int:

@@ -127,3 +127,36 @@ func test_surface_tiles_are_sixteen_pixels() -> void:
         if texture != null:
             check_eq(Vector2i(texture.get_size()), Vector2i(16, 16),
                 "%s is a 16px tile" % path.get_file())
+
+func test_starter_kit_is_complete() -> void:
+    # The locked starter kit. Anything the UI or airport scene reaches for has
+    # to exist, or it silently renders nothing at gameplay size.
+    var expected: Dictionary = {
+        "res://assets/art/ui/icons/%s.png": [
+            "passenger", "cargo", "contract", "money", "clock", "plane", "warning",
+            "fuel", "range", "route", "condition", "seat_slot", "cargo_slot",
+            "upgrade", "speed", "runway",
+        ],
+        "res://assets/art/airports/buildings/%s.png": [
+            "terminal_1", "terminal_2", "terminal_3", "hangar_small",
+            "cargo_shed", "tower", "fuel_depot",
+        ],
+        "res://assets/art/airports/props/%s.png": [
+            "windsock", "apron_light", "runway_sign", "fence",
+        ],
+        "res://assets/art/airports/vehicles/%s.png": ["tug", "fuel_truck", "baggage_cart"],
+        "res://assets/art/cargo/crate_%s.png": ["box", "mail", "medical", "livestock"],
+    }
+    for pattern: String in expected:
+        for name: String in expected[pattern]:
+            var path: String = pattern % name
+            check(ResourceLoader.exists(path), "missing starter-kit asset %s" % path)
+
+func test_every_aircraft_family_has_a_full_sprite_set() -> void:
+    var db := GameDB.new()
+    db.load_all()
+    for family_id: String in db.aircraft:
+        var key: String = family_id.replace("ac_", "")
+        for suffix: String in ["top", "side", "top_rot", "map_rot"]:
+            var path: String = "res://assets/art/aircraft/%s/%s_%s.png" % [key, key, suffix]
+            check(ResourceLoader.exists(path), "missing %s sprite for %s" % [suffix, family_id])
