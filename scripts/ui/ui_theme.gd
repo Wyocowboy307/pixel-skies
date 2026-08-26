@@ -17,7 +17,16 @@ const MARGIN := 4.0
 static func colour(key: String) -> Color:
     return PixelPalette.get_colour(key)
 
-static func label(text: String, colour_key: String = "text") -> Label:
+## A big, obviously-pressable action button (Load / Route / Fly).
+static func action(text: String) -> Button:
+    var node := Button.new()
+    node.text = text
+    node.theme_type_variation = "ActionButton"
+    node.add_theme_font_size_override("font_size", FONT_SIZE)
+    node.custom_minimum_size = Vector2(72.0, 22.0)
+    return node
+
+static func label(text: String, colour_key: String = "ink") -> Label:
     var node := Label.new()
     node.text = text
     node.add_theme_font_size_override("font_size", FONT_SIZE)

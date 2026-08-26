@@ -71,7 +71,72 @@ def row_hover() -> Canvas:
     return canvas
 
 
+def warm_panel() -> Canvas:
+    """The default management panel: a warm card, not a dark instrument bezel."""
+    return nine_slice(9, 4, "panel", "panel_edge", "panel_light", "panel_shade")
+
+
+def warm_panel_raised() -> Canvas:
+    return nine_slice(9, 4, "panel_light", "panel_edge", "white", "panel_shade")
+
+
+def warm_button() -> Canvas:
+    return nine_slice(7, 3, "panel_light", "panel_edge", "white", "panel_shade")
+
+
+def warm_button_hover() -> Canvas:
+    return nine_slice(7, 3, "accent_orange_light", "panel_deep", "white", "accent_orange")
+
+
+def warm_button_pressed() -> Canvas:
+    """Pressed inverts the bevel — the oldest and clearest press cue."""
+    return nine_slice(7, 3, "panel_shade", "panel_edge", "panel_shade", "white")
+
+
+def warm_button_disabled() -> Canvas:
+    return nine_slice(7, 3, "panel_shade", "panel_shade", "panel_shade", "panel_shade")
+
+
+def warm_row() -> Canvas:
+    canvas = Canvas(5, 5)
+    canvas.rect(0, 0, 5, 5, "panel_light")
+    canvas.hline(0, 4, 0, "panel_shade")
+    return canvas
+
+
+def warm_row_hover() -> Canvas:
+    canvas = Canvas(5, 5)
+    canvas.rect(0, 0, 5, 5, "accent_orange_light")
+    canvas.hline(0, 4, 0, "white")
+    return canvas
+
+
+## A big, obviously-pressable action button.
+def action_button() -> Canvas:
+    return nine_slice(9, 4, "accent_orange", "panel_deep", "accent_orange_light", "accent_red")
+
+
+def action_button_hover() -> Canvas:
+    return nine_slice(9, 4, "accent_orange_light", "panel_deep", "white", "accent_orange")
+
+
+def action_button_disabled() -> Canvas:
+    return nine_slice(9, 4, "panel_shade", "panel_edge", "panel_shade", "panel_shade")
+
+
 FRAMES: dict[str, callable] = {
+    "warm_panel": warm_panel,
+    "warm_panel_raised": warm_panel_raised,
+    "warm_button_normal": warm_button,
+    "warm_button_hover": warm_button_hover,
+    "warm_button_pressed": warm_button_pressed,
+    "warm_button_disabled": warm_button_disabled,
+    "warm_row_normal": warm_row,
+    "warm_row_hover": warm_row_hover,
+    "action_normal": action_button,
+    "action_hover": action_button_hover,
+    "action_pressed": action_button,
+    "action_disabled": action_button_disabled,
     "panel": panel,
     "panel_raised": panel_raised,
     "button_normal": button_normal,

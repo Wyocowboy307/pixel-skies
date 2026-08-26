@@ -7,7 +7,10 @@ extends RefCounted
 ## ships a strip of headings drawn at build time and the engine picks the
 ## nearest (docs/PIXEL_STYLE_GUIDE.md).
 
-const FRAMES := 16
+## Baked heading count is read from the strip, not hardcoded: the strip is
+## always N square frames wide, so re-baking at a different count needs no code
+## change.
+const DEFAULT_FRAMES := 32
 const GROUND_STRIP := "res://assets/art/aircraft/%s/%s_top_rot.png"
 const MAP_STRIP := "res://assets/art/aircraft/%s/%s_map_rot.png"
 const SIDE_SPRITE := "res://assets/art/aircraft/%s/%s_side.png"
@@ -36,9 +39,15 @@ static func side_sprite(family_id: String) -> Texture2D:
 
 ## Nearest baked heading. Frame 0 points east (+x) and frames advance clockwise,
 ## matching screen space where +y is south.
-static func frame_for(heading_radians: float) -> int:
-    var frame: int = int(roundf(heading_radians / TAU * float(FRAMES)))
-    return ((frame % FRAMES) + FRAMES) % FRAMES
+static func frames_in(strip: Texture2D) -> int:
+    if strip == null or strip.get_size().y <= 0.0:
+        return DEFAULT_FRAMES
+    return maxi(1, int(roundf(strip.get_size().x / strip.get_size().y)))
+
+static func frame_for(heading_radians: float, frames: int = DEFAULT_FRAMES) -> int:
+    var count: int = maxi(1, frames)
+    var frame: int = int(roundf(heading_radians / TAU * float(count)))
+    return ((frame % count) + count) % count
 
 ## Compass bearing (0 = north, 90 = east) to a screen-space angle.
 static func bearing_to_screen(bearing_degrees: float) -> float:
@@ -51,7 +60,7 @@ static func draw_frame(canvas: CanvasItem, strip: Texture2D, at: Vector2,
     if strip == null:
         return
     var frame_size: float = strip.get_size().y
-    var frame: int = frame_for(heading_radians)
+    var frame: int = frame_for(heading_radians, frames_in(strip))
     var region := Rect2(Vector2(float(frame) * frame_size, 0.0), Vector2(frame_size, frame_size))
     var drawn: Vector2 = region.size * float(maxi(1, scale))
     canvas.draw_texture_rect_region(strip, Rect2((at - drawn * 0.5).round(), drawn), region)

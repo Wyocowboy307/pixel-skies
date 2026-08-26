@@ -32,11 +32,17 @@ var _busy := false
 var _world_return_position := Vector2.ZERO
 var _world_return_stop := 2
 var _followed_aircraft_id := ""
+## Built once and assigned to every top-level Control we own.
+var _ui_theme: Theme
 
 func _ready() -> void:
-    # One theme built from the generated pixel frames, applied to the whole
-    # tree so no control can fall back to Godot's default vector styling.
-    get_tree().root.theme = PixelTheme.build()
+    # Theme lookup walks up through Control and Window nodes only. These views
+    # hang off a CanvasLayer under a Node2D, which breaks that chain, so a theme
+    # set on the root Window never reaches them and every control silently falls
+    # back to Godot's default vector styling. It has to be assigned to each
+    # top-level Control we own.
+    _ui_theme = PixelTheme.build()
+    get_tree().root.theme = _ui_theme
     db.load_all()
     _report_data_problems()
 
@@ -52,6 +58,8 @@ func _ready() -> void:
     _transition = ViewTransition.new()
     add_child(_transition)
 
+    _hud.theme = _ui_theme
+    _overlay.theme = _ui_theme
     _map.bind_camera(_camera)
     _hud.bind_sim(sim)
     _overlay.bind(db, _camera, sim)
@@ -173,6 +181,7 @@ func enter_airport(airport_id: String) -> void:
     _airport_camera.make_current()
 
     _airport_hud = AirportHud.new()
+    _airport_hud.theme = _ui_theme
     $UI.add_child(_airport_hud)
     _airport_hud.bind(sim, airport_id)
     _airport_hud.dispatch_completed.connect(_on_dispatch_completed)
@@ -233,12 +242,11 @@ func open_aircraft_detail(aircraft_id: String) -> void:
         return
     _detail_return = _view
     _detail_view = AircraftDetailView.new()
+    _detail_view.theme = _ui_theme
     $UI.add_child(_detail_view)
     _detail_view.bind(sim, aircraft_id)
     _detail_view.closed.connect(close_aircraft_detail)
-    _detail_view.load_requested.connect(_on_detail_load)
-    _detail_view.route_requested.connect(_on_detail_route)
-    _detail_view.depart_requested.connect(_on_detail_depart)
+    _detail_view.dispatched.connect(_on_detail_dispatched)
     _hud.visible = false
     if _airport_hud != null:
         _airport_hud.visible = false
@@ -259,33 +267,15 @@ func close_aircraft_detail() -> void:
     elif _view == View.WORLD:
         _overlay.visible = true
 
-## Load and Route only mean something at an airport, so they take the player
-## there rather than failing silently on the detail screen.
-func _on_detail_load() -> void:
-    var aircraft_id: String = _detail_view.aircraft_id
-    var plane: AircraftInstance = sim.state.aircraft.get(aircraft_id, null)
-    close_aircraft_detail()
-    if plane != null and not plane.location_id.is_empty() and _view != View.AIRPORT:
-        enter_airport(plane.location_id)
-    if _airport_hud != null:
-        _airport_hud.select_aircraft(aircraft_id)
-
-func _on_detail_route() -> void:
-    var aircraft_id: String = _detail_view.aircraft_id
-    _on_detail_load()
-    await get_tree().process_frame
-    if _airport_hud != null:
-        _airport_hud.select_aircraft(aircraft_id)
-        _airport_hud.routing = true
-        _airport_hud.refresh()
-
-func _on_detail_depart() -> void:
-    var aircraft_id: String = _detail_view.aircraft_id
-    if _airport_hud != null and not _airport_hud.selected_destination.is_empty():
-        sim.dispatch(aircraft_id, _airport_hud.selected_destination)
-        close_aircraft_detail()
+## Dispatching from the plane screen hands the player straight to the world to
+## watch the departure, which is the point of pressing Fly.
+func _on_detail_dispatched(flight_id: String) -> void:
+    var leg: FlightLeg = sim.state.flights.get(flight_id, null)
+    if leg == null:
         return
-    _on_detail_route()
+    _followed_aircraft_id = leg.aircraft_id
+    _overlay.selected_aircraft_id = leg.aircraft_id
+    _detail_return = View.WORLD
 
 func _unhandled_input(event: InputEvent) -> void:
     if not event.is_action_pressed("ui_cancel"):

@@ -712,7 +712,9 @@ def _leg(canvas: Canvas, x: int, top: int, ground: int, radius: int) -> None:
 # Rotation frames
 # ---------------------------------------------------------------------------
 
-ROTATION_FRAMES = 16
+## 32 headings, not 16. A 22.5-degree step is visible as a snap when an
+## aircraft turns onto course; 11.25 degrees reads as rotation.
+ROTATION_FRAMES = 32
 ## The map icon is a separate, much smaller sprite. The 48 px airport sprite
 ## would cover a quarter of the United States at world zoom, and simply scaling
 ## it down would resample it — so the map gets its own drawing at icon scale
@@ -758,25 +760,37 @@ def _map_icon_points(spec: AircraftSpec) -> list[tuple[float, float, str]]:
     return points
 
 
-def build_map_icon(spec: AircraftSpec, heading_index: int = 0) -> Canvas:
-    """One heading of the map aircraft, drawn natively at that angle."""
+def build_map_icon(spec: AircraftSpec, heading_index: int = 0, bank: int = 0) -> Canvas:
+    """One heading of the map aircraft, drawn natively at that angle.
+
+    `bank` of -1 or +1 foreshortens the wings and lifts the raised one, which is
+    how a banking aircraft reads from directly above. Baking the bank rather
+    than skewing at runtime keeps every pixel hard.
+    """
     canvas = Canvas(MAP_ICON_SIZE, MAP_ICON_SIZE)
     centre = MAP_ICON_SIZE // 2
     angle = heading_index * (2.0 * math.pi / ROTATION_FRAMES)
     fx, fy = math.cos(angle), math.sin(angle)
+    squash = 0.55 if bank else 1.0
     for along, across, colour in _map_icon_points(spec):
-        x = centre + along * fx - across * fy
-        y = centre + along * fy + across * fx
+        # Wings compress toward the fuselage; the wing on the raised side also
+        # shifts a pixel along the body, which sells the tilt.
+        span = across * squash
+        shift = 0.0
+        if bank and abs(across) > 1.0:
+            shift = 0.9 if (across > 0) == (bank > 0) else -0.9
+        x = centre + (along + shift) * fx - span * fy
+        y = centre + (along + shift) * fy + span * fx
         canvas.plot(int(round(x)), int(round(y)), colour)
     canvas.outline()
     return canvas
 
 
-def build_map_rotation_strip(spec: AircraftSpec) -> Canvas:
+def build_map_rotation_strip(spec: AircraftSpec, bank: int = 0) -> Canvas:
     """All headings of the map icon, each drawn natively rather than rotated."""
     strip = Canvas(MAP_ICON_SIZE * ROTATION_FRAMES, MAP_ICON_SIZE)
     for index in range(ROTATION_FRAMES):
-        strip.blit(build_map_icon(spec, index), index * MAP_ICON_SIZE, 0)
+        strip.blit(build_map_icon(spec, index, bank), index * MAP_ICON_SIZE, 0)
     return strip
 
 

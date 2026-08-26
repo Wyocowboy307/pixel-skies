@@ -16,23 +16,35 @@ static func build() -> Theme:
     theme.default_font = font
     theme.default_font_size = FONT_SIZE
 
-    theme.set_stylebox("panel", "PanelContainer", _frame("panel", 4, 3))
-    theme.set_stylebox("panel", "Panel", _frame("panel", 4, 3))
+    # Warm card panels rather than dark instrument bezels.
+    theme.set_stylebox("panel", "PanelContainer", _frame("warm_panel", 4, 3))
+    theme.set_stylebox("panel", "Panel", _frame("warm_panel", 4, 3))
 
     for state: String in ["normal", "hover", "pressed", "disabled"]:
-        theme.set_stylebox(state, "Button", _frame("button_%s" % state, 3, 2))
-    theme.set_stylebox("focus", "Button", _frame("button_hover", 3, 2))
+        theme.set_stylebox(state, "Button", _frame("warm_button_%s" % state, 3, 2))
+    theme.set_stylebox("focus", "Button", _frame("warm_button_hover", 3, 2))
     theme.set_font("font", "Button", font)
     theme.set_font_size("font_size", "Button", FONT_SIZE)
-    theme.set_color("font_color", "Button", PixelPalette.get_colour("text"))
-    theme.set_color("font_hover_color", "Button", PixelPalette.get_colour("white"))
-    theme.set_color("font_pressed_color", "Button", PixelPalette.get_colour("accent_orange"))
-    theme.set_color("font_disabled_color", "Button", PixelPalette.get_colour("text_dim"))
+    theme.set_color("font_color", "Button", PixelPalette.get_colour("ink"))
+    theme.set_color("font_hover_color", "Button", PixelPalette.get_colour("panel_deep"))
+    theme.set_color("font_pressed_color", "Button", PixelPalette.get_colour("panel_deep"))
+    theme.set_color("font_disabled_color", "Button", PixelPalette.get_colour("ink_soft"))
     theme.set_constant("h_separation", "Button", 2)
+
+    # Big obvious action buttons — Load, Route, Fly — as a type variation.
+    for state: String in ["normal", "hover", "pressed", "disabled"]:
+        theme.set_stylebox(state, "ActionButton", _frame("action_%s" % state, 4, 4))
+    theme.set_type_variation("ActionButton", "Button")
+    theme.set_font("font", "ActionButton", font)
+    theme.set_font_size("font_size", "ActionButton", FONT_SIZE)
+    theme.set_color("font_color", "ActionButton", PixelPalette.get_colour("panel_deep"))
+    theme.set_color("font_hover_color", "ActionButton", PixelPalette.get_colour("panel_deep"))
+    theme.set_color("font_pressed_color", "ActionButton", PixelPalette.get_colour("white"))
+    theme.set_color("font_disabled_color", "ActionButton", PixelPalette.get_colour("ink_soft"))
 
     theme.set_font("font", "Label", font)
     theme.set_font_size("font_size", "Label", FONT_SIZE)
-    theme.set_color("font_color", "Label", PixelPalette.get_colour("text"))
+    theme.set_color("font_color", "Label", PixelPalette.get_colour("ink"))
 
     # Scrollbars: thin solid bars, no rounded grabbers.
     for axis: String in ["VScrollBar", "HScrollBar"]:

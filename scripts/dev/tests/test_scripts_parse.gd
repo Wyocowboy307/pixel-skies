@@ -45,3 +45,16 @@ func _all_files(root: String, suffix: String) -> PackedStringArray:
     for sub: String in dir.get_directories():
         out.append_array(_all_files(root.path_join(sub), suffix))
     return out
+
+func test_ui_theme_reaches_controls_under_a_canvas_layer() -> void:
+    # Theme lookup walks Control and Window ancestors only. A CanvasLayer in the
+    # chain breaks it, so a theme set on the root Window never arrives and every
+    # control silently falls back to Godot's default styling. Assigning the
+    # theme directly is what makes the pixel frames actually render.
+    var theme: Theme = PixelTheme.build()
+    var panel: StyleBox = theme.get_stylebox("panel", "PanelContainer")
+    check(panel is StyleBoxTexture, "panel style is a generated 9-slice, not a flat box")
+    if panel is StyleBoxTexture:
+        check((panel as StyleBoxTexture).texture != null, "the 9-slice has its texture")
+    var button: StyleBox = theme.get_stylebox("normal", "Button")
+    check(button is StyleBoxTexture, "button style is a generated 9-slice")

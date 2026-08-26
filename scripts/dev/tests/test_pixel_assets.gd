@@ -95,7 +95,7 @@ func test_sprites_have_hard_edges() -> void:
 func test_aircraft_sprites_match_their_declared_canvas() -> void:
     # Sizes come from the style guide's canvas ladder, keyed by family.
     var expected: Dictionary = {
-        "trailhopper_4": {"top": Vector2i(48, 48), "side": Vector2i(208, 120)},
+        "trailhopper_4": {"top": Vector2i(48, 48), "side": Vector2i(144, 96)},
         "twinwing_8": {"top": Vector2i(64, 64), "side": Vector2i(264, 144)},
         "highline_19": {"top": Vector2i(96, 96), "side": Vector2i(320, 176)},
     }
@@ -118,8 +118,13 @@ func test_rotation_strips_are_complete() -> void:
         check(texture != null, "missing rotation strip for %s" % key)
         if texture == null:
             continue
+        # The strip is N square frames wide; the engine reads N from the strip
+        # itself, so the test only requires a whole number of square frames and
+        # enough of them to read as rotation rather than snapping.
         var size: Vector2 = texture.get_size()
-        check_eq(int(size.x), int(size.y) * 16, "%s strip holds 16 headings" % key)
+        var frames: int = int(size.x) / maxi(1, int(size.y))
+        check_eq(int(size.x) % maxi(1, int(size.y)), 0, "%s strip is whole frames" % key)
+        check(frames >= 16, "%s strip has %d headings, want at least 16" % [key, frames])
 
 func test_surface_tiles_are_sixteen_pixels() -> void:
     for path: String in _pngs("res://assets/art/airports/tiles"):

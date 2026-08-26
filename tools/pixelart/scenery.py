@@ -403,3 +403,43 @@ def crate(kind: str = "box") -> Canvas:
     canvas.vline(5, 1, 10, band)
     canvas.outline()
     return canvas
+
+
+def seated_passenger(shirt: str = "accent_teal", hair: str = "soil") -> Canvas:
+    """A passenger seen through a cabin window: head and shoulders only.
+
+    Sized to sit inside an 11px seat window. Anything more detailed than a head,
+    hair and a collar is invisible at this size and just muddies the shape.
+    """
+    canvas = Canvas(9, 9)
+    canvas.rect(2, 4, 5, 5, shirt)          # shoulders
+    canvas.hline(2, 6, 4, "white")          # collar
+    canvas.rect(2, 0, 5, 4, "sand_light")   # head
+    canvas.hline(2, 6, 0, hair)             # hair
+    canvas.plot(2, 1, hair)
+    canvas.plot(6, 1, hair)
+    canvas.plot(3, 2, "outline")            # eyes
+    canvas.plot(5, 2, "outline")
+    return canvas
+
+
+def cabin_crate(kind: str = "box") -> Canvas:
+    """A crate sized for a cargo bay slot."""
+    canvas = Canvas(9, 9)
+    body, band = {
+        "box": ("roof_cargo", "sand_light"),
+        "mail": ("accent_teal", "white"),
+        "medical": ("white", "accent_red"),
+        "livestock": ("sand", "soil"),
+    }.get(kind, ("roof_cargo", "sand_light"))
+    canvas.rect(0, 1, 9, 8, body)
+    canvas.hline(0, 8, 1, "wall_light")
+    canvas.hline(0, 8, 4, band)
+    canvas.vline(4, 1, 8, band)
+    canvas.rect_outline(0, 1, 9, 8, "outline")
+    return canvas
+
+
+PASSENGER_SHIRTS: list[str] = [
+    "accent_teal", "accent_orange", "accent_green", "accent_red", "livery_light",
+]

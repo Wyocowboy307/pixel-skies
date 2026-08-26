@@ -53,6 +53,20 @@ PALETTE: dict[str, str] = {
     "accent_red": "#c05a4a",
     "accent_yellow": "#d9b45a",
     "accent_green": "#7fb37a",
+    # Daylight. The detail screen stands the aircraft outside in good weather
+    # rather than in a dark instrument bay.
+    "sky": "#7fb6d1",
+    "sky_light": "#a8d3e4",
+    "sky_deep": "#5b93b3",
+    # Warm UI. The cool navy panel ramp reads as a technical control program;
+    # these are the friendlier surfaces the management layer sits on.
+    "panel": "#e3d5b4",
+    "panel_light": "#f2e8cd",
+    "panel_shade": "#c2b08a",
+    "panel_edge": "#8a7355",
+    "panel_deep": "#5c4a35",
+    "ink": "#33291d",
+    "ink_soft": "#6b5a44",
     # Ink and UI
     "outline": "#0e141a",
     "shadow": "#1a2028",

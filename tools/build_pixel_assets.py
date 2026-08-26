@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pixelart import font_build, scenery, ui                      # noqa: E402
+from pixelart import aircraft_side, font_build, scenery, ui       # noqa: E402
 from pixelart.aircraft import (SPECS, build_map_rotation_strip,    # noqa: E402
                                build_rotation_strip, build_side, build_top)
 from pixelart.palette import PALETTE                              # noqa: E402
@@ -27,15 +27,29 @@ ART = ROOT / "assets" / "art"
 DATA = ROOT / "data"
 
 
+## Families whose side profile uses the charming redesign. The others keep the
+## older side art until the direction is signed off.
+CHARM_SIDES = {"trailhopper_4": aircraft_side.TRAILHOPPER}
+
+
 def build_aircraft() -> int:
     count = 0
     for key, spec in SPECS.items():
         folder = ART / "aircraft" / key
         build_top(spec).save(folder / f"{key}_top.png", f"{key}_top")
-        build_side(spec).save(folder / f"{key}_side.png", f"{key}_side")
+        if key in CHARM_SIDES:
+            canvas, anchors = aircraft_side.build(CHARM_SIDES[key])
+            canvas.save(folder / f"{key}_side.png", f"{key}_side")
+            (folder / f"{key}_side.json").write_text(json.dumps(anchors, indent=2) + "\n")
+            count += 1
+        else:
+            build_side(spec).save(folder / f"{key}_side.png", f"{key}_side")
         build_rotation_strip(spec).save(folder / f"{key}_top_rot.png", f"{key}_top_rot")
         build_map_rotation_strip(spec).save(folder / f"{key}_map_rot.png", f"{key}_map_rot")
-        count += 4
+        for bank, suffix in ((-1, "bankl"), (1, "bankr")):
+            build_map_rotation_strip(spec, bank).save(
+                folder / f"{key}_map_{suffix}.png", f"{key}_map_{suffix}")
+        count += 6
     return count
 
 
@@ -65,6 +79,10 @@ def build_vehicles() -> int:
 
 def build_people_and_cargo() -> int:
     people = ART / "people"
+    for index, shirt in enumerate(scenery.PASSENGER_SHIRTS):
+        scenery.seated_passenger(shirt).save(people / f"seated_{index}.png", f"seated_{index}")
+    for kind in ("box", "mail", "medical", "livestock"):
+        scenery.cabin_crate(kind).save(ART / "cargo" / f"cabin_{kind}.png", kind)
     shirts = {
         "traveller_teal": "accent_teal",
         "traveller_orange": "accent_orange",
@@ -77,7 +95,7 @@ def build_people_and_cargo() -> int:
     cargo = ART / "cargo"
     for kind in ("box", "mail", "medical", "livestock"):
         scenery.crate(kind).save(cargo / f"crate_{kind}.png", kind)
-    return len(shirts) + 4
+    return len(shirts) + 4 + len(scenery.PASSENGER_SHIRTS) + 4
 
 
 def build_ui() -> int:
