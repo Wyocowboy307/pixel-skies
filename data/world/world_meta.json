@@ -3,49 +3,42 @@
   "source": "Natural Earth (public domain) via nvkelso/natural-earth-vector",
   "projection": "equirectangular",
   "world_units": {
-    "width": 4096,
-    "height": 2048
+    "width": 2048,
+    "height": 1024
   },
-  "palette": {
-    "ocean_deep": "#0f2435",
-    "ocean": "#17364a",
-    "ocean_shelf": "#214c63",
-    "coast_dark": "#0b1a25",
-    "coast_light": "#86a99b",
-    "ice": "#d3e2e8",
-    "tundra": "#647469",
-    "boreal": "#3d5a45",
-    "temperate": "#536c54",
-    "steppe": "#677651",
-    "arid": "#7d7853",
-    "tropical": "#3f6642",
-    "lake": "#1d445c",
-    "border": "#2f3f3a"
-  },
+  "note": "colours come from the locked palette in tools/pixelart/palette.py",
   "lods": [
     {
       "name": "lod0",
       "texture": "res://assets/art/world/world_lod0.png",
-      "width": 1024,
-      "height": 512,
+      "width": 512,
+      "height": 256,
       "source_layer": "ne_110m_land",
-      "world_scale": 4
+      "world_scale": 4.0
     },
     {
       "name": "lod1",
       "texture": "res://assets/art/world/world_lod1.png",
-      "width": 2048,
-      "height": 1024,
+      "width": 1024,
+      "height": 512,
       "source_layer": "ne_110m_land",
-      "world_scale": 2
+      "world_scale": 2.0
     },
     {
       "name": "lod2",
       "texture": "res://assets/art/world/world_lod2.png",
+      "width": 2048,
+      "height": 1024,
+      "source_layer": "ne_110m_land",
+      "world_scale": 1.0
+    },
+    {
+      "name": "lod3",
+      "texture": "res://assets/art/world/world_lod3.png",
       "width": 4096,
       "height": 2048,
       "source_layer": "ne_50m_land",
-      "world_scale": 1
+      "world_scale": 0.5
     }
   ]
 }

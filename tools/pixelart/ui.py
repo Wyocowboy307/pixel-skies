@@ -1,0 +1,165 @@
+"""Pixel UI: 9-slice frames, buttons and icons.
+
+Panels are chunky bevelled frames rather than rounded translucent cards, so the
+management layer belongs to the same world as the airfield under it.
+"""
+
+from __future__ import annotations
+
+from .canvas import Canvas
+
+
+def nine_slice(size: int, border: int, fill: str, edge: str, highlight: str,
+               shade: str) -> Canvas:
+    """A bevelled frame with a 1 px outer outline.
+
+    Light from the upper left: the top and left inner bevel is `highlight`, the
+    bottom and right is `shade`.
+    """
+    canvas = Canvas(size, size)
+    canvas.rect(0, 0, size, size, fill)
+    canvas.rect_outline(0, 0, size, size, "outline")
+    canvas.rect_outline(1, 1, size - 2, size - 2, edge)
+    # Inner bevel.
+    canvas.hline(2, size - 3, 2, highlight)
+    canvas.vline(2, 2, size - 3, highlight)
+    canvas.hline(2, size - 3, size - 3, shade)
+    canvas.vline(size - 3, 2, size - 3, shade)
+    if border >= 4:
+        canvas.plot(2, 2, highlight)
+        canvas.plot(size - 3, size - 3, shade)
+    return canvas
+
+
+def panel() -> Canvas:
+    """Main HUD panel. 4 px border, so the 9-slice centre is 1 px."""
+    return nine_slice(9, 4, "ui_bg", "ui_border", "ui_border_light", "outline")
+
+
+def panel_raised() -> Canvas:
+    return nine_slice(9, 4, "ui_bg_light", "ui_border", "ui_border_light", "outline")
+
+
+def button_normal() -> Canvas:
+    return nine_slice(7, 3, "ui_bg_light", "ui_border", "ui_border_light", "outline")
+
+
+def button_hover() -> Canvas:
+    return nine_slice(7, 3, "ui_border", "ui_border_light", "white", "outline")
+
+
+def button_pressed() -> Canvas:
+    """Pressed inverts the bevel, which is the oldest and clearest press cue."""
+    return nine_slice(7, 3, "ui_bg", "ui_border", "outline", "ui_border_light")
+
+
+def button_disabled() -> Canvas:
+    return nine_slice(7, 3, "ui_bg", "ui_bg_light", "ui_bg_light", "outline")
+
+
+def row_normal() -> Canvas:
+    canvas = Canvas(5, 5)
+    canvas.rect(0, 0, 5, 5, "ui_bg_light")
+    canvas.hline(0, 4, 0, "ui_border")
+    return canvas
+
+
+def row_hover() -> Canvas:
+    canvas = Canvas(5, 5)
+    canvas.rect(0, 0, 5, 5, "ui_border")
+    canvas.hline(0, 4, 0, "ui_border_light")
+    return canvas
+
+
+FRAMES: dict[str, callable] = {
+    "panel": panel,
+    "panel_raised": panel_raised,
+    "button_normal": button_normal,
+    "button_hover": button_hover,
+    "button_pressed": button_pressed,
+    "button_disabled": button_disabled,
+    "row_normal": row_normal,
+    "row_hover": row_hover,
+}
+
+
+# ---------------------------------------------------------------------------
+# Icons — 10x10, one idea each, readable at 1:1
+# ---------------------------------------------------------------------------
+
+def icon_passenger() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.disc(4.5, 2.5, 2.0, "accent_teal")
+    canvas.rect(2, 5, 6, 5, "accent_teal")
+    canvas.hline(2, 7, 5, "white")
+    canvas.outline()
+    return canvas
+
+
+def icon_cargo() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.rect(1, 2, 8, 7, "accent_yellow")
+    canvas.hline(1, 8, 2, "sand_light")
+    canvas.hline(1, 8, 5, "soil")
+    canvas.vline(4, 2, 8, "soil")
+    canvas.outline()
+    return canvas
+
+
+def icon_contract() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.rect(2, 1, 6, 8, "white")
+    canvas.hline(3, 6, 3, "accent_red")
+    canvas.hline(3, 6, 5, "text_dim")
+    canvas.hline(3, 5, 7, "text_dim")
+    canvas.outline()
+    return canvas
+
+
+def icon_money() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.disc(4.5, 4.5, 4.0, "accent_orange")
+    canvas.disc(4.5, 4.5, 2.6, "accent_orange_light")
+    canvas.vline(4, 2, 7, "accent_orange")
+    canvas.outline()
+    return canvas
+
+
+def icon_clock() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.disc(4.5, 4.5, 4.0, "ui_border_light")
+    canvas.disc(4.5, 4.5, 3.0, "ui_bg")
+    canvas.vline(4, 2, 4, "white")
+    canvas.hline(4, 6, 4, "white")
+    canvas.outline()
+    return canvas
+
+
+def icon_plane() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.hline(1, 8, 4, "livery_light")
+    canvas.vline(5, 1, 8, "livery")
+    canvas.hline(2, 8, 5, "livery_dark")
+    canvas.vline(2, 3, 6, "livery")
+    canvas.outline()
+    return canvas
+
+
+def icon_warning() -> Canvas:
+    canvas = Canvas(10, 10)
+    canvas.polygon([(4, 0), (9, 9), (0, 9)], "accent_red")
+    canvas.vline(4, 3, 6, "white")
+    canvas.plot(4, 8, "white")
+    canvas.outline()
+    return canvas
+
+
+ICONS: dict[str, callable] = {
+    "passenger": icon_passenger,
+    "cargo": icon_cargo,
+    "contract": icon_contract,
+    "money": icon_money,
+    "clock": icon_clock,
+    "plane": icon_plane,
+    "warning": icon_warning,
+}

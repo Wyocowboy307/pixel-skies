@@ -28,6 +28,9 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from pixelart.palette import ALLOWED_RGB, rgb  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "tools" / ".ne_cache"
 ART_OUT = ROOT / "assets" / "art" / "world"
@@ -36,43 +39,47 @@ DATA_OUT = ROOT / "data" / "world"
 BASE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson"
 
 # ---------------------------------------------------------------------------
-# Palette. One controlled palette for the whole world map, per docs/ART_BIBLE.md.
-# Light direction is upper-left, so coasts get a light NW rim and a dark SE rim.
+# The map draws from the same locked palette as every sprite, so the world can
+# never drift into a different colour language from the aircraft standing on it
+# (docs/PIXEL_STYLE_GUIDE.md section 2).
+#
+# Nothing here blends or multiplies colours: a blend of two palette entries is
+# not a palette entry. Shading is done with ordered dithering between two
+# palette colours instead, which is also what makes the map read as pixel art
+# rather than as a smooth vector fill.
 # ---------------------------------------------------------------------------
-PALETTE = {
-    "ocean_deep":    (0x0f, 0x24, 0x35),
-    "ocean":         (0x17, 0x36, 0x4a),
-    "ocean_shelf":   (0x21, 0x4c, 0x63),
-    "coast_dark":    (0x0b, 0x1a, 0x25),
-    "coast_light":   (0x86, 0xa9, 0x9b),
-    "ice":           (0xd3, 0xe2, 0xe8),
-    "tundra":        (0x64, 0x74, 0x69),
-    "boreal":        (0x3d, 0x5a, 0x45),
-    "temperate":     (0x53, 0x6c, 0x54),
-    "steppe":        (0x67, 0x76, 0x51),
-    "arid":          (0x7d, 0x78, 0x53),
-    "tropical":      (0x3f, 0x66, 0x42),
-    "lake":          (0x1d, 0x44, 0x5c),
-    "border":        (0x2f, 0x3f, 0x3a),
-}
+OCEAN_DEEP = "water_deep"
+OCEAN = "water"
+SHELF = "water_shelf"
+COAST = "outline"
+COAST_LIT = "tundra"
+LAKE = "water_shelf"
+BORDER = "outline"
 
-# Latitude colour bands, stylized rather than climatological: a readable
-# flat-lay map look. (abs_lat_upper_bound, palette_key)
+# Latitude colour bands, coldest first. Stylized rather than climatological.
 LAT_BANDS = [
     (72.0, "ice"),
     (60.0, "tundra"),
-    (50.0, "boreal"),
-    (34.0, "temperate"),
-    (20.0, "arid"),
-    (10.0, "steppe"),
-    (0.0, "tropical"),
+    (50.0, "grass_dark"),
+    (34.0, "grass"),
+    (20.0, "sand"),
+    (10.0, "scrub"),
+    (0.0, "grass_dark"),
 ]
 
-# How far a band boundary may wander, in degrees of latitude. Straight
-# horizontal colour changes across a continent look like a gradient overlay
-# rather than terrain, so boundaries are displaced by coherent noise.
+# Darker partner used to dither the interior of each band, giving landmasses
+# depth without inventing a colour.
+BAND_SHADE = {
+    "ice": "ice",
+    "tundra": "grass_dark",
+    "grass_dark": "outline",
+    "grass": "grass_dark",
+    "sand": "soil",
+    "scrub": "grass_dark",
+}
+
+# How far a band boundary may wander, in degrees of latitude.
 BAND_NOISE_DEGREES = 9.0
-# Width of the stippled transition either side of a boundary.
 BAND_DITHER_DEGREES = 2.5
 
 BAYER4 = np.array([
@@ -85,7 +92,7 @@ BAYER4 = np.array([
 
 class Lod:
     def __init__(self, name, width, height, land_src, simplify_px,
-                 min_area_px, shelf_px, lakes, borders, states):
+                 min_area_px, shelf_px, lakes, borders, states, dither_scale=1.0):
         self.name = name
         self.width = width
         self.height = height
@@ -96,6 +103,9 @@ class Lod:
         self.lakes = lakes
         self.borders = borders
         self.states = states
+        # Finer tiers are viewed closer, where a heavy stipple stops reading as
+        # terrain and starts reading as screen noise.
+        self.dither_scale = dither_scale
 
 
 # Three tiers, sized so each one displays at an integer scale at a camera zoom
@@ -103,13 +113,16 @@ class Lod:
 # draws at 4x, lod1 at 2x and lod2 at 1x — no fractional texel sampling, which
 # is what keeps pixel art from shimmering while zooming.
 LODS = [
-    Lod("lod0", 1024, 512, "ne_110m_land", 0.9, 5.0, 2,
+    Lod("lod0", 512, 256, "ne_110m_land", 1.1, 4.0, 1,
         lakes=None, borders=None, states=None),
-    Lod("lod1", 2048, 1024, "ne_110m_land", 0.75, 6.0, 3,
-        lakes="ne_50m_lakes", borders="ne_110m_admin_0_boundary_lines_land", states=None),
-    Lod("lod2", 4096, 2048, "ne_50m_land", 0.6, 8.0, 4,
+    Lod("lod1", 1024, 512, "ne_110m_land", 0.9, 5.0, 2,
+        lakes="ne_50m_lakes", borders=None, states=None),
+    Lod("lod2", 2048, 1024, "ne_110m_land", 0.75, 6.0, 3,
+        lakes="ne_50m_lakes", borders="ne_110m_admin_0_boundary_lines_land", states=None,
+        dither_scale=0.7),
+    Lod("lod3", 4096, 2048, "ne_50m_land", 0.6, 8.0, 4,
         lakes="ne_50m_lakes", borders="ne_50m_admin_0_boundary_lines_land",
-        states="ne_50m_admin_1_states_provinces_lines"),
+        states="ne_50m_admin_1_states_provinces_lines", dither_scale=0.45),
 ]
 
 
@@ -320,58 +333,88 @@ def latitude_bands(lod: Lod) -> np.ndarray:
     return index
 
 
+def bayer(height: int, width: int, size: int = 4) -> np.ndarray:
+    """Tiled ordered-dither threshold field in 0..1."""
+    base = BAYER4 if size == 4 else np.array([[0, 2], [3, 1]], dtype=np.float32) / 4.0
+    tiled = np.tile(base, (height // base.shape[0] + 1, width // base.shape[1] + 1))
+    return tiled[:height, :width]
+
+
+def dither_mix(rgb_buffer: np.ndarray, mask: np.ndarray, colour: str,
+               shade: str, amount: float, field: np.ndarray) -> None:
+    """Fill `mask` with `colour`, stippling `shade` in at `amount` coverage.
+
+    Two palette colours in an ordered pattern instead of one blended colour:
+    the result stays inside the palette and reads as deliberate pixel shading.
+    """
+    rgb_buffer[mask] = rgb(colour)
+    stipple = mask & (field < amount)
+    rgb_buffer[stipple] = rgb(shade)
+
+
 def render(lod: Lod) -> Image.Image:
     print(f"[{lod.name}] {lod.width}x{lod.height}")
     land = polygon_mask(fetch(lod.land_src)["features"], lod)
     print(f"[{lod.name}]   land pixels: {int(land.sum()):,}")
 
-    rgb = np.zeros((lod.height, lod.width, 3), dtype=np.uint8)
-    rgb[:] = PALETTE["ocean_deep"]
+    field = bayer(lod.height, lod.width)
+    rgb_buffer = np.zeros((lod.height, lod.width, 3), dtype=np.uint8)
+    rgb_buffer[:] = rgb(OCEAN_DEEP)
 
-    # Continental shelf ring: reads as shallow water and separates land from the
-    # deep ocean without an outline doing all the work.
+    # Shelf and open-ocean rings separate land from deep water without relying
+    # on the coastline outline to do all the work.
     shelf = dilate(land, lod.shelf_px) & ~land
     open_ocean = dilate(land, lod.shelf_px * 3) & ~land & ~shelf
-    rgb[open_ocean] = PALETTE["ocean"]
-    rgb[shelf] = PALETTE["ocean_shelf"]
+    dither_mix(rgb_buffer, open_ocean, OCEAN, OCEAN_DEEP, 0.35, field)
+    rgb_buffer[shelf] = rgb(SHELF)
 
-    # Land colour by latitude band.
+    # Land colour by latitude band, with the interior stippled darker.
     band_index = latitude_bands(lod)
-    for index, (_bound, key) in enumerate(LAT_BANDS):
-        rgb[land & (band_index == index)] = PALETTE[key]
-
-    # Interior shading: pixels far from any coast darken slightly, giving the
-    # landmasses depth without a lighting pass.
     interior = erode(land, max(2, lod.shelf_px * 2))
     deep_interior = erode(interior, max(3, lod.shelf_px * 3))
-    rgb[interior] = (rgb[interior].astype(np.int16) * 0.93).astype(np.uint8)
-    rgb[deep_interior] = (rgb[deep_interior].astype(np.int16) * 0.93).astype(np.uint8)
+    # Dither coverage is modulated by low-frequency noise rather than being a
+    # constant. A constant produces a uniform crosshatch across every landmass,
+    # which reads as screen noise; varying it produces patches of lighter and
+    # darker ground, which reads as terrain.
+    variation = fractal_noise(lod.height, lod.width, seed=771)
+    interior_amount = np.clip((0.16 + variation * 0.20) * lod.dither_scale, 0.0, 0.6)
+    deep_amount = np.clip((0.30 + variation * 0.26) * lod.dither_scale, 0.0, 0.8)
+    for index, (_bound, key) in enumerate(LAT_BANDS):
+        in_band = land & (band_index == index)
+        rgb_buffer[in_band] = rgb(key)
+        shade = BAND_SHADE.get(key, key)
+        if shade != key:
+            rgb_buffer[in_band & interior & (field < interior_amount)] = rgb(shade)
+            rgb_buffer[in_band & deep_interior & (field < deep_amount)] = rgb(shade)
 
     if lod.lakes:
         lakes = polygon_mask(fetch(lod.lakes)["features"], lod) & land
-        rgb[lakes] = PALETTE["lake"]
+        rgb_buffer[lakes] = rgb(LAKE)
         land = land & ~lakes
 
+    # Borders are stippled rather than blended, so they read as a hint at a line
+    # without introducing an off-palette colour.
     if lod.borders:
         borders = line_mask(fetch(lod.borders)["features"], lod, lod.simplify_px) & land
-        blended = rgb[borders].astype(np.int16) * 0.55 + np.array(PALETTE["border"]) * 0.45
-        rgb[borders] = blended.astype(np.uint8)
-
+        rgb_buffer[borders & (field < 0.55)] = rgb(BORDER)
     if lod.states:
         states = line_mask(fetch(lod.states)["features"], lod, lod.simplify_px) & land
-        # State hints are deliberately fainter than country borders.
-        blended = rgb[states].astype(np.int16) * 0.78 + np.array(PALETTE["border"]) * 0.22
-        rgb[states] = blended.astype(np.uint8)
+        rgb_buffer[states & (field < 0.28)] = rgb(BORDER)
 
-    # Coastline last so nothing overdraws it. Upper-left light: the NW-facing
-    # edge catches light, the rest of the outline stays dark.
+    # Coastline last so nothing overdraws it: a hard 1 px outline, with the
+    # north-west facing edge catching the light.
     edge = land & ~erode(land, 1)
     lit = edge & ~shift(land, -1, -1)
-    rgb[edge] = PALETTE["coast_dark"]
-    rgb[lit & edge] = PALETTE["coast_light"]
+    rgb_buffer[edge] = rgb(COAST)
+    rgb_buffer[lit] = rgb(COAST_LIT)
 
-    image = Image.fromarray(rgb).convert("RGBA")
-    return image
+    used = {tuple(int(v) for v in c) for c in np.unique(rgb_buffer.reshape(-1, 3), axis=0)}
+    stray = used - ALLOWED_RGB
+    if stray:
+        swatches = ", ".join("#%02x%02x%02x" % c for c in sorted(stray))
+        raise SystemExit(f"{lod.name}: colours outside the locked palette: {swatches}")
+
+    return Image.fromarray(rgb_buffer).convert("RGBA")
 
 
 def main() -> None:
@@ -382,8 +425,8 @@ def main() -> None:
         "generated_by": "tools/build_world_geometry.py",
         "source": "Natural Earth (public domain) via nvkelso/natural-earth-vector",
         "projection": "equirectangular",
-        "world_units": {"width": 4096, "height": 2048},
-        "palette": {k: "#%02x%02x%02x" % v for k, v in PALETTE.items()},
+        "world_units": {"width": 2048, "height": 1024},
+        "note": "colours come from the locked palette in tools/pixelart/palette.py",
         "lods": [],
     }
 
@@ -399,7 +442,7 @@ def main() -> None:
             "width": lod.width,
             "height": lod.height,
             "source_layer": lod.land_src,
-            "world_scale": 4096 // lod.width,
+            "world_scale": 2048 / lod.width,
         })
 
     (DATA_OUT / "world_meta.json").write_text(json.dumps(meta, indent=2) + "\n")
