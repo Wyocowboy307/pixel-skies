@@ -82,6 +82,19 @@ which finds glazing as connected components arranged in a row. A test asserts
 every sprite agrees with its own anchors and that no anchor falls outside the
 image — without it, passengers are drawn outside the aircraft.
 
+## Current service status (2026-08-26)
+
+- `generate-image-bitforge` (style-locked generation) is returning **HTTP 500**
+  server-side on every call, including minimal requests. Style-locking against
+  the approved reference is therefore unavailable.
+- Unlocked `generate-image-pixflux` was probed twice for the airport prop kit:
+  both terminals came back **isometric** despite explicit flat-top-down prompts
+  and hardened negatives, which clashes with the flat-lay airport direction.
+- Decision: the prop/icon kit is **on hold until bitforge recovers**, rather
+  than approving assets that visibly drift. The aircraft cutaway direction is
+  locked in the spec and currently shipped from the deterministic pipeline;
+  two pixflux cutaway candidates were rejected (no interior / wrong facing).
+
 ## Known gaps
 
 - Generated aircraft have no visible cargo hold, so cargo anchors are placed

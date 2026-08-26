@@ -29,7 +29,7 @@ NEGATIVE = (
     "gradient, colour banding, glow, noisy dithering, technical diagram, "
     "blueprint, schematic, cluttered detail, rivets, text, letters, numbers, "
     "logo, watermark, drop shadow, realistic proportions, long thin fuselage, "
-    "many wheels, landing gear bogies, facing left, jet engines, closed windows, portholes"
+    "many wheels, landing gear bogies, facing left, jet engines, closed windows, portholes, isometric, three-quarter view, 3d perspective, vanishing point"
 )
 
 # Structured controls, chosen to match docs/PIXEL_STYLE_GUIDE.md exactly.
@@ -140,9 +140,10 @@ STARTER: list[AssetSpec] = [
         key="terminal",
         logical="airports/buildings/terminal_1.png",
         prompt=(
-            "top-down view of a small friendly airport terminal building, flat "
-            "roof with skylights and roof vents, glazed frontage along one side, "
-            "warm sandy walls, entrance canopy"
+            "directly overhead flat top-down orthographic view of a small "
+            "friendly airport terminal building, flat rectangular roof filling "
+            "the frame, roof vents and skylights seen from straight above, thin "
+            "glazed frontage strip along the bottom edge, warm sandy colours"
         ),
         size=(96, 48), view="high top-down", coverage=90.0,
     ),
