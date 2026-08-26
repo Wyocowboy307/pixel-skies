@@ -1,21 +1,20 @@
 class_name AirportView
 extends Node2D
-## Top-down airport ground scene, built from a data-defined AirportLayout.
+## Top-down airport diorama, built from data-defined layout plus pixel tiles and
+## sprites. Nothing here is drawn as a smooth primitive.
 ##
-## Local coordinates are centred on (0,0); the world map's geographic space
-## never reaches here (docs/TECH_ARCHITECTURE.md, "Airport movement").
-## Milestone 4 adds moving aircraft and the ground-service loop on top of this
-## same layout data.
-
-const GROUND_PATCHES := 220
-## Aircraft are drawn larger than strict runway-relative scale. The plane is the
-## thing the player is here to look at, so it is exaggerated for readability the
-## way the whole art direction is (docs/GAME_BIBLE.md, "visible cause/effect").
-const AIRCRAFT_SCALE := 1.7
-const RUNWAY_DASH := 34.0
-const RUNWAY_GAP := 26.0
+## Local coordinates are centred on (0,0) and aligned to the 16 px tile grid; the
+## world map's geographic space never reaches here
+## (docs/TECH_ARCHITECTURE.md, "Airport movement").
 
 signal aircraft_clicked(aircraft_id: String)
+
+const TILE := 16
+const TILES := "res://assets/art/airports/tiles/%s.png"
+const BUILDINGS := "res://assets/art/airports/buildings/%s.png"
+const VEHICLES := "res://assets/art/airports/vehicles/%s.png"
+const AIRCRAFT_ROT := "res://assets/art/aircraft/%s/%s_top_rot.png"
+const ROTATION_FRAMES := 16
 
 var airport_id := ""
 var layout: Dictionary = {}
@@ -23,31 +22,31 @@ var airport: Dictionary = {}
 var sim: Simulation
 var selected_aircraft_id := ""
 
+var _biome := "mountain"
+var _tiles: Dictionary = {}
+var _sprites: Dictionary = {}
+var _rotations: Dictionary = {}
+var _scatter: Array[Dictionary] = []
 var _prop_phase := 0.0
 
-var _biome: Dictionary = {}
-var _patches: Array[Dictionary] = []
+func _ready() -> void:
+    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+    set_process(true)
 
 func setup(airport_data: Dictionary, layout_data: Dictionary) -> void:
     airport = airport_data
     layout = layout_data
     airport_id = String(airport_data.get("id", ""))
-    _biome = AirportPalette.biome(String(layout.get("biome", "plains")))
-    _build_ground_texture()
+    _biome = String(layout.get("biome", "plains"))
+    _build_scatter()
     queue_redraw()
-
-func _ready() -> void:
-    texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    set_process(true)
 
 func bind_sim(simulation: Simulation) -> void:
     sim = simulation
     queue_redraw()
 
 func _process(delta: float) -> void:
-    # Propellers only spin on aircraft that are actually running, so motion in
-    # the scene always means something is happening.
-    _prop_phase = fposmod(_prop_phase + delta * 22.0, TAU)
+    _prop_phase = fposmod(_prop_phase + delta * 14.0, TAU)
     if _has_running_aircraft():
         queue_redraw()
 
@@ -59,14 +58,64 @@ func _has_running_aircraft() -> bool:
             return true
     return false
 
-## Stand position and heading, in local scene coordinates.
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+
+func _tile(name: String) -> Texture2D:
+    if not _tiles.has(name):
+        var path: String = TILES % name
+        _tiles[name] = load(path) if ResourceLoader.exists(path) else null
+    return _tiles[name]
+
+func _sprite(path: String) -> Texture2D:
+    if not _sprites.has(path):
+        _sprites[path] = load(path) if ResourceLoader.exists(path) else null
+    return _sprites[path]
+
+func _rotation_strip(family_id: String) -> Texture2D:
+    if not _rotations.has(family_id):
+        var key: String = family_id.replace("ac_", "")
+        var path: String = AIRCRAFT_ROT % [key, key]
+        _rotations[family_id] = load(path) if ResourceLoader.exists(path) else null
+    return _rotations[family_id]
+
+func _grass_tile() -> String:
+    match _biome:
+        "plains": return "grass_plains"
+        "highplains": return "grass_highplains"
+        _: return "grass_mountain"
+
+# ---------------------------------------------------------------------------
+# Geometry helpers
+# ---------------------------------------------------------------------------
+
+func _vec(raw: Variant) -> Vector2:
+    var array: Array = raw
+    if array.size() < 2:
+        return Vector2.ZERO
+    return Vector2(float(array[0]), float(array[1]))
+
+func _extent() -> Vector2:
+    return _vec(layout.get("ground_extent", [768, 432])) * 0.5
+
+func bounds() -> Rect2:
+    var extent: Vector2 = _extent()
+    return Rect2(-extent, extent * 2.0)
+
+func apron_centre() -> Vector2:
+    var apron: Dictionary = layout.get("apron", {})
+    if apron.is_empty():
+        return Vector2.ZERO
+    return _vec(apron.get("centre", [0, 0])) + Vector2(0.0, 40.0)
+
 func stand_transform(stand_id: String) -> Dictionary:
     for entry: Variant in layout.get("stands", []):
         var stand: Dictionary = entry
         if String(stand.get("id", "")) == stand_id:
             return {
                 "position": _vec(stand.get("position", [0, 0])),
-                "heading": deg_to_rad(float(stand.get("heading", 90.0))),
+                "heading": deg_to_rad(float(stand.get("heading", -90.0))),
                 "size": String(stand.get("size", "small")),
             }
     return {}
@@ -78,7 +127,7 @@ func aircraft_at_point(local_point: Vector2) -> String:
         var place: Dictionary = stand_transform(plane.stand_id)
         if place.is_empty():
             continue
-        if (place["position"] as Vector2).distance_to(local_point) < 60.0:
+        if (place["position"] as Vector2).distance_to(local_point) < 26.0:
             return plane.id
     return ""
 
@@ -95,36 +144,29 @@ func _unhandled_input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
         queue_redraw()
 
-## Scatter is generated once from a fixed seed so the ground never shimmers
-## between frames and looks identical every time this airport is opened.
-func _build_ground_texture() -> void:
-    _patches.clear()
-    var extent: Vector2 = _extent()
-    var rng := RandomNumberGenerator.new()
-    rng.seed = hash(airport_id)
-    for i in range(GROUND_PATCHES):
-        _patches.append({
-            "position": Vector2(
-                rng.randf_range(-extent.x, extent.x),
-                rng.randf_range(-extent.y, extent.y)),
-            "size": Vector2(rng.randf_range(14.0, 46.0), rng.randf_range(8.0, 22.0)),
-        })
-
-func _extent() -> Vector2:
-    var raw: Array = layout.get("ground_extent", [1500, 900])
-    return Vector2(float(raw[0]), float(raw[1])) * 0.5
-
-## Where the camera should sit by default: the apron, pulled slightly toward the
-## runway so both the stands and the departure end are in frame.
-func apron_centre() -> Vector2:
-    var apron: Dictionary = layout.get("apron", {})
-    if apron.is_empty():
-        return Vector2.ZERO
-    return _vec(apron.get("centre", [0, 0])) + Vector2(0.0, 60.0)
-
-func bounds() -> Rect2:
-    var extent: Vector2 = _extent()
-    return Rect2(-extent, extent * 2.0)
+## Deterministic decoration scatter, seeded from the airport id, so a field
+## looks identical every time it is opened.
+func _build_scatter() -> void:
+    _scatter.clear()
+    var index := 0
+    for item: Variant in layout.get("decor", []):
+        var decor: Dictionary = item
+        var centre: Vector2 = _vec(decor.get("position", [0, 0]))
+        var size: Vector2 = _vec(decor.get("size", [64, 64]))
+        var kind: String = String(decor.get("type", "trees"))
+        var rng := RandomNumberGenerator.new()
+        rng.seed = hash("%s_decor_%d" % [airport_id, index])
+        index += 1
+        var density: float = 900.0 if kind == "ridge" else 1500.0
+        var count: int = clampi(int(size.x * size.y / density), 4, 90)
+        for _i in range(count):
+            _scatter.append({
+                "kind": kind,
+                "at": Vector2(
+                    roundf(centre.x + rng.randf_range(-size.x, size.x) * 0.5),
+                    roundf(centre.y + rng.randf_range(-size.y, size.y) * 0.5)),
+                "size": rng.randi_range(2, 4),
+            })
 
 # ---------------------------------------------------------------------------
 # Drawing
@@ -141,6 +183,7 @@ func _draw() -> void:
     _draw_apron()
     _draw_stands()
     _draw_buildings()
+    _draw_service_vehicles()
     _draw_parked_aircraft()
 
 func _all_runways() -> Array[Dictionary]:
@@ -152,273 +195,236 @@ func _all_runways() -> Array[Dictionary]:
         out.append(extra as Dictionary)
     return out
 
+## Tiling is done by the renderer (draw_texture_rect with tile=true), so a whole
+## surface costs one draw call regardless of how many tiles it covers.
+func _tiled(name: String, rect: Rect2) -> void:
+    var texture: Texture2D = _tile(name)
+    if texture != null:
+        draw_texture_rect(texture, rect, true)
+
 func _draw_ground() -> void:
     var extent: Vector2 = _extent()
-    # Oversized so panning at the edge of the scene never shows through.
-    draw_rect(Rect2(-extent * 1.6, extent * 3.2), _biome["ground"])
-    for patch: Dictionary in _patches:
-        draw_rect(Rect2(patch["position"], patch["size"]), _biome["ground_alt"])
+    # Oversized so panning to the edge never reveals the clear colour.
+    _tiled(_grass_tile(), Rect2(-extent - Vector2(256, 256), extent * 2.0 + Vector2(512, 512)))
 
-## Regional flavour comes from modular decoration rather than a bespoke tileset
-## per airport (docs/ART_BIBLE.md, "Biomes"). Everything is seeded from the
-## airport id, so a field looks the same every time it is opened.
 func _draw_decor() -> void:
-    var index := 0
-    for item: Variant in layout.get("decor", []):
-        var decor: Dictionary = item
-        var position: Vector2 = _vec(decor.get("position", [0, 0]))
-        var size: Vector2 = _vec(decor.get("size", [100, 60]))
-        var kind: String = String(decor.get("type", "trees"))
-        var rng := RandomNumberGenerator.new()
-        rng.seed = hash("%s_decor_%d" % [airport_id, index])
-        index += 1
-        match kind:
-            "ridge": _draw_ridge(position, size, rng)
-            "trees": _draw_trees(position, size, rng)
-            "fields": _draw_fields(position, size, rng)
-            _: _draw_scrub(position, size, rng)
-
-## Ridges read as forested foothills seen from above: overlapping canopy masses
-## with occasional rock breaking through. Flat-lay perspective is preserved
-## (docs/ART_BIBLE.md) without pretending flat polygons are a mountain — the
-## real mountain tiles come from the art pipeline in Phase B.
-func _draw_ridge(centre: Vector2, size: Vector2, rng: RandomNumberGenerator) -> void:
-    var canopy: Color = _biome["decor"].darkened(0.22)
-    var rock: Color = _biome["ridge"]
-    var clumps: int = maxi(10, int(size.x * size.y / 2600.0))
-    for _i in range(clumps):
-        var at := centre + Vector2(
-            rng.randf_range(-size.x, size.x) * 0.5,
-            rng.randf_range(-size.y, size.y) * 0.5)
-        var radius: float = rng.randf_range(18.0, 40.0)
-        draw_circle(at + Vector2(4.0, 5.0), radius, AirportPalette.SHADOW)
-        draw_circle(at, radius, canopy)
-        # Upper-left light catches the north-west shoulder of each mass.
-        draw_circle(at - Vector2(radius * 0.34, radius * 0.34), radius * 0.4,
-            Color(AirportPalette.MARK_WHITE, 0.07))
-    # A few exposed crests so a mountain field still reads as high country.
-    var crests: int = maxi(2, clumps / 6)
-    for _i in range(crests):
-        var at := centre + Vector2(
-            rng.randf_range(-size.x, size.x) * 0.42,
-            rng.randf_range(-size.y, size.y) * 0.36)
-        var radius: float = rng.randf_range(11.0, 20.0)
-        draw_circle(at, radius, rock)
-        draw_circle(at - Vector2(radius * 0.3, radius * 0.3), radius * 0.45,
-            Color(AirportPalette.MARK_WHITE, 0.16))
-
-func _draw_trees(centre: Vector2, size: Vector2, rng: RandomNumberGenerator) -> void:
-    var count: int = int(size.x * size.y / 900.0)
-    for _i in range(count):
-        var at := centre + Vector2(
-            rng.randf_range(-size.x, size.x) * 0.5,
-            rng.randf_range(-size.y, size.y) * 0.5)
-        var radius: float = rng.randf_range(6.0, 13.0)
-        draw_circle(at + Vector2(2.0, 3.0), radius, AirportPalette.SHADOW)
-        draw_circle(at, radius, _biome["decor"])
-        draw_circle(at - Vector2(radius * 0.3, radius * 0.3), radius * 0.42,
-            Color(AirportPalette.MARK_WHITE, 0.08))
-
-## Crop rows: the plains read as farmed rather than as a green rectangle.
-func _draw_fields(centre: Vector2, size: Vector2, rng: RandomNumberGenerator) -> void:
-    var rect := Rect2(centre - size * 0.5, size)
-    draw_rect(rect, _biome["decor"])
-    var rows: int = maxi(3, int(size.y / 18.0))
-    for i in range(rows):
-        var y: float = rect.position.y + (float(i) + 0.5) * size.y / float(rows)
-        var inset: float = rng.randf_range(0.0, size.x * 0.06)
-        draw_line(Vector2(rect.position.x + inset, y),
-            Vector2(rect.position.x + size.x - inset, y),
-            Color(_biome["ground_alt"], 0.55), 2.0)
-    draw_rect(rect, Color(AirportPalette.OUTLINE, 0.18), false, 1.0)
-
-func _draw_scrub(centre: Vector2, size: Vector2, rng: RandomNumberGenerator) -> void:
-    var count: int = int(size.x * size.y / 700.0)
-    for _i in range(count):
-        var at := centre + Vector2(
-            rng.randf_range(-size.x, size.x) * 0.5,
-            rng.randf_range(-size.y, size.y) * 0.5)
-        draw_rect(Rect2(at, Vector2(rng.randf_range(5.0, 11.0), rng.randf_range(3.0, 6.0))),
-            _biome["decor"])
+    var canopy: Color = PixelPalette.get_colour("grass_dark")
+    var rock: Color = PixelPalette.get_colour("tundra")
+    var crop: Color = PixelPalette.get_colour("scrub")
+    var shadow: Color = PixelPalette.get_colour("outline")
+    for item: Dictionary in _scatter:
+        var at: Vector2 = item["at"]
+        var size: float = float(item["size"])
+        var kind: String = String(item["kind"])
+        var colour: Color = canopy
+        if kind == "ridge":
+            colour = rock
+        elif kind == "fields" or kind == "scrub":
+            colour = crop
+        # Solid blocks with a one-pixel shadow: no soft circles anywhere.
+        draw_rect(Rect2(at + Vector2.ONE, Vector2(size, size)), shadow)
+        draw_rect(Rect2(at, Vector2(size, size)), colour)
+        draw_rect(Rect2(at, Vector2(maxf(1.0, size - 2.0), 1.0)),
+            PixelPalette.get_colour("grass_light"))
 
 func _draw_runway(runway: Dictionary) -> void:
     var start: Vector2 = _vec(runway.get("start", [0, 0]))
     var end: Vector2 = _vec(runway.get("end", [0, 0]))
-    var width: float = float(runway.get("width", 44.0))
-    var axis: Vector2 = (end - start).normalized()
-    var normal := Vector2(-axis.y, axis.x)
-    var half: Vector2 = normal * width * 0.5
+    var width: float = float(runway.get("width", 32.0))
+    var rect := Rect2(Vector2(start.x, start.y - width * 0.5), Vector2(end.x - start.x, width))
 
-    # Surface, with a shoulder so the runway reads as raised off the grass.
-    var shoulder: Vector2 = normal * (width * 0.5 + 7.0)
-    draw_colored_polygon(PackedVector2Array([
-        start + shoulder, end + shoulder, end - shoulder, start - shoulder]),
-        AirportPalette.ASPHALT_EDGE)
-    draw_colored_polygon(PackedVector2Array([
-        start + half, end + half, end - half, start - half]), AirportPalette.ASPHALT)
+    _tiled("asphalt", rect)
+    # Edge lines, threshold bars, then the centreline: the reading order that
+    # makes a runway instantly different from a taxiway.
+    _tiled("runway_edge_top", Rect2(rect.position, Vector2(rect.size.x, TILE)))
+    _tiled("runway_edge_bottom", Rect2(Vector2(rect.position.x, rect.end.y - TILE),
+        Vector2(rect.size.x, TILE)))
+    _tiled("runway_threshold", Rect2(rect.position, Vector2(TILE * 2, rect.size.y)))
+    _tiled("runway_threshold", Rect2(Vector2(rect.end.x - TILE * 2, rect.position.y),
+        Vector2(TILE * 2, rect.size.y)))
+    _tiled("runway_centreline", Rect2(
+        Vector2(rect.position.x + TILE * 3, rect.position.y + rect.size.y * 0.5 - TILE * 0.5),
+        Vector2(rect.size.x - TILE * 6, TILE)))
+    _draw_designations(runway, rect)
 
-    # Edge lines make the runway instantly distinct from taxiway and apron.
-    draw_line(start + half, end + half, AirportPalette.MARK_WHITE, 2.0)
-    draw_line(start - half, end - half, AirportPalette.MARK_WHITE, 2.0)
-
-    _draw_centreline(start, end, axis)
-    _draw_threshold(start, axis, normal, width)
-    _draw_threshold(end, -axis, normal, width)
-    _draw_designations(runway, start, end, axis, normal, width)
-
-func _draw_centreline(start: Vector2, end: Vector2, axis: Vector2) -> void:
-    var length: float = start.distance_to(end)
-    var travelled: float = 90.0
-    while travelled < length - 90.0:
-        var a: Vector2 = start + axis * travelled
-        var b: Vector2 = start + axis * minf(travelled + RUNWAY_DASH, length - 90.0)
-        draw_line(a, b, AirportPalette.MARK_WHITE, 2.0)
-        travelled += RUNWAY_DASH + RUNWAY_GAP
-
-## Piano-key threshold bars: the clearest possible "this end is a runway" cue.
-func _draw_threshold(at: Vector2, inward: Vector2, normal: Vector2, width: float) -> void:
-    var bars := 6
-    var bar_width: float = width / float(bars * 2 - 1)
-    var base: Vector2 = at + inward * 18.0
-    for i in range(bars):
-        var offset: float = (float(i) - float(bars - 1) * 0.5) * bar_width * 2.0
-        var centre: Vector2 = base + normal * offset
-        var a: Vector2 = centre - normal * bar_width * 0.5
-        var b: Vector2 = centre + normal * bar_width * 0.5
-        draw_colored_polygon(PackedVector2Array([
-            a, b, b + inward * 34.0, a + inward * 34.0]), AirportPalette.MARK_WHITE)
-
-func _draw_designations(runway: Dictionary, start: Vector2, end: Vector2,
-        axis: Vector2, normal: Vector2, _width: float) -> void:
+func _draw_designations(runway: Dictionary, rect: Rect2) -> void:
     var designations: Array = runway.get("designations", [])
     if designations.size() < 2:
         return
-    var font: Font = ThemeDB.fallback_font
-    _draw_rotated_text(String(designations[0]), start + axis * 74.0, axis, normal, font)
-    _draw_rotated_text(String(designations[1]), end - axis * 74.0, -axis, normal, font)
+    var font: Font = load("res://assets/art/ui/font5x7.fnt")
+    var colour: Color = PixelPalette.get_colour("white")
+    var mid_y: float = rect.position.y + rect.size.y * 0.5
+    # Painted on the surface, so they read along the direction of travel.
+    _rotated_text(font, String(designations[0]),
+        Vector2(rect.position.x + TILE * 3, mid_y), -PI * 0.5, colour)
+    _rotated_text(font, String(designations[1]),
+        Vector2(rect.end.x - TILE * 3, mid_y), PI * 0.5, colour)
 
-## Runway numbers are painted on the surface, so they read along the direction
-## of travel rather than along the screen.
-func _draw_rotated_text(text: String, at: Vector2, axis: Vector2, _normal: Vector2, font: Font) -> void:
-    var font_size := 26
-    var extents: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
-    draw_set_transform(at, axis.angle() - PI * 0.5, Vector2.ONE)
-    draw_string(font, Vector2(-extents.x * 0.5, extents.y * 0.32), text,
-        HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(AirportPalette.MARK_WHITE, 0.9))
+func _rotated_text(font: Font, text: String, at: Vector2, angle: float, colour: Color) -> void:
+    var extents: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7)
+    draw_set_transform(at.round(), angle, Vector2.ONE)
+    draw_string(font, Vector2(-roundf(extents.x * 0.5), 3.0), text,
+        HORIZONTAL_ALIGNMENT_LEFT, -1, 7, colour)
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_taxiways() -> void:
     for item: Variant in layout.get("taxiways", []):
         var taxiway: Dictionary = item
-        var points: PackedVector2Array = _points(taxiway.get("points", []))
-        if points.size() < 2:
-            continue
-        # A tone shift plus a yellow centreline is what separates taxiway from
-        # runway at a glance (docs/ART_BIBLE.md, "Airport readability").
-        draw_polyline(points, AirportPalette.TAXIWAY_EDGE, 34.0)
-        draw_polyline(points, AirportPalette.TAXIWAY, 28.0)
-        draw_polyline(points, AirportPalette.MARK_YELLOW, 2.0)
+        var width: float = float(taxiway.get("width", TILE))
+        var points: Array = taxiway.get("points", [])
+        for i in range(points.size() - 1):
+            var a: Vector2 = _vec(points[i])
+            var b: Vector2 = _vec(points[i + 1])
+            var rect: Rect2 = _segment_rect(a, b, width)
+            _tiled("taxiway", rect)
+            # Yellow centreline runs along the segment's long axis.
+            if absf(b.x - a.x) >= absf(b.y - a.y):
+                _tiled("taxiway_centreline", Rect2(
+                    Vector2(rect.position.x, rect.position.y + rect.size.y * 0.5 - TILE * 0.5),
+                    Vector2(rect.size.x, TILE)))
+            else:
+                draw_rect(Rect2(
+                    Vector2(rect.position.x + rect.size.x * 0.5 - 1.0, rect.position.y),
+                    Vector2(1.0, rect.size.y)), PixelPalette.get_colour("accent_yellow"))
+
+## Axis-aligned segments only, which is what the authored layouts use; a
+## diagonal taxiway would need a rotated tile set.
+func _segment_rect(a: Vector2, b: Vector2, width: float) -> Rect2:
+    var half: float = width * 0.5
+    var min_point := Vector2(minf(a.x, b.x), minf(a.y, b.y))
+    var max_point := Vector2(maxf(a.x, b.x), maxf(a.y, b.y))
+    return Rect2(min_point - Vector2(half, half),
+        (max_point - min_point) + Vector2(width, width))
 
 func _draw_apron() -> void:
     var apron: Dictionary = layout.get("apron", {})
     if apron.is_empty():
         return
     var centre: Vector2 = _vec(apron.get("centre", [0, 0]))
-    var size: Vector2 = _vec(apron.get("size", [300, 120]))
-    var rect := Rect2(centre - size * 0.5, size)
-    draw_rect(rect.grow(3.0), AirportPalette.CONCRETE_EDGE)
-    draw_rect(rect, AirportPalette.CONCRETE)
+    var size: Vector2 = _vec(apron.get("size", [256, 80]))
+    _tiled("apron", Rect2(centre - size * 0.5, size))
 
+## A stand is one marking, drawn once. Tiling the marking texture across the
+## stand area repeats the cross every 16 px and turns the apron into a grid of
+## crosses instead of a parking position.
 func _draw_stands() -> void:
-    var font: Font = ThemeDB.fallback_font
-    for item: Variant in layout.get("stands", []):
-        var stand: Dictionary = item
-        var position: Vector2 = _vec(stand.get("position", [0, 0]))
-        var heading: float = deg_to_rad(float(stand.get("heading", 90.0)))
-        var facing := Vector2(cos(heading), sin(heading))
-        var across := Vector2(-facing.y, facing.x)
+    var font: Font = load("res://assets/art/ui/font5x7.fnt")
+    var yellow: Color = PixelPalette.get_colour("accent_yellow")
+    for entry: Variant in layout.get("stands", []):
+        var stand: Dictionary = entry
+        var at: Vector2 = _vec(stand.get("position", [0, 0])).round()
         var span: float = _stand_span(String(stand.get("size", "small")))
+        var half: float = roundf(span * 0.5)
+        var heading: float = deg_to_rad(float(stand.get("heading", -90.0)))
+        var facing := Vector2(cos(heading), sin(heading)).round()
+        var across := Vector2(-facing.y, facing.x)
 
-        # Lead-in line and a stop bar: the visual language of a parking stand.
-        draw_line(position - facing * span * 1.4, position, AirportPalette.MARK_YELLOW, 2.0)
-        draw_line(position - across * span * 0.5, position + across * span * 0.5,
-            AirportPalette.MARK_YELLOW, 3.0)
-        draw_arc(position, span * 0.62, 0.0, TAU, 24, Color(AirportPalette.MARK_YELLOW, 0.4), 1.0)
-        draw_string(font, position + across * span * 0.5 + Vector2(6.0, -6.0),
-            String(stand.get("id", "")).replace("stand_", "S"),
-            HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(AirportPalette.MARK_YELLOW, 0.85))
+        # Lead-in line running back from the stop bar the way the aircraft taxis.
+        var lead_from: Vector2 = at - facing * half
+        for step in range(int(half)):
+            var pixel: Vector2 = (at - facing * float(step)).round()
+            if step % 4 != 3:
+                draw_rect(Rect2(pixel, Vector2.ONE), yellow)
+        # Stop bar across the nose position.
+        var bar_half: float = roundf(half * 0.45)
+        draw_rect(Rect2((at + facing * 4.0 - across * bar_half).round(),
+            (across.abs() * bar_half * 2.0 + facing.abs() + Vector2(1, 1)).round()), yellow)
+        # Corner ticks marking the box the aircraft must sit inside.
+        for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+            var origin: Vector2 = (at + corner * half).round()
+            draw_rect(Rect2(origin - Vector2(maxf(0.0, corner.x) * 5.0, 0.0), Vector2(5, 1)), yellow)
+            draw_rect(Rect2(origin - Vector2(0.0, maxf(0.0, corner.y) * 5.0), Vector2(1, 5)), yellow)
 
-## Stand markings are sized to the aircraft they hold, which are drawn at
-## AIRCRAFT_SCALE, so the two stay visually consistent.
+        var label: String = String(stand.get("id", "")).replace("stand_", "S")
+        draw_string(font, (at + Vector2(-half + 2.0, -half + 8.0)).round(), label,
+            HORIZONTAL_ALIGNMENT_LEFT, -1, 7, yellow)
+        var _unused: Vector2 = lead_from
+
 func _stand_span(size_name: String) -> float:
     match size_name:
-        "large": return 150.0
-        "medium": return 112.0
-        _: return 82.0
+        "large": return 96.0
+        "medium": return 80.0
+        _: return 64.0
 
-## Buildings get a roof plus a short south face, the "tiny amount of readable
-## side information" the art bible allows in an otherwise flat-lay view.
 func _draw_buildings() -> void:
-    var font: Font = ThemeDB.fallback_font
-    for item: Variant in layout.get("buildings", []):
-        var building: Dictionary = item
-        var position: Vector2 = _vec(building.get("position", [0, 0]))
-        var size: Vector2 = _vec(building.get("size", [120, 60]))
-        var kind: String = String(building.get("type", "cargo"))
-        var rect := Rect2(position - size * 0.5, size)
-        var roof: Color = AirportPalette.building_roof(kind)
+    for entry: Variant in layout.get("buildings", []):
+        var building: Dictionary = entry
+        _blit_building(String(building.get("sprite", "terminal_1")),
+            _vec(building.get("position", [0, 0])))
+    # Upgrade slots only appear once the airline has actually built them, which
+    # is what makes an upgrade a visible change (docs/AIRPORT_SYSTEM.md).
+    if sim == null:
+        return
+    for entry: Variant in layout.get("upgrade_slots", []):
+        var slot: Dictionary = entry
+        if _slot_is_built(String(slot.get("visual_change", ""))):
+            _blit_building(String(slot.get("sprite", "")), _vec(slot.get("position", [0, 0])))
 
-        draw_rect(Rect2(rect.position + Vector2(5.0, 7.0), rect.size), AirportPalette.SHADOW)
-        draw_rect(rect, roof)
-        draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y), Vector2(rect.size.x, 10.0)),
-            AirportPalette.TERMINAL_FACE)
-        draw_rect(rect, AirportPalette.OUTLINE, false, 1.0)
-        # Upper-left light: a thin highlight along the north edge.
-        draw_line(rect.position, rect.position + Vector2(rect.size.x, 0.0),
-            Color(AirportPalette.MARK_WHITE, 0.18), 1.0)
+func _slot_is_built(visual_change: String) -> bool:
+    for upgrade_id: String in sim.state.upgrades_at(airport_id):
+        var upgrade: Dictionary = sim.db.airport_upgrades.get(upgrade_id, {})
+        if String(upgrade.get("visual_change", "")) == visual_change:
+            return true
+    return false
 
-        if kind == "terminal":
-            var code: String = String(airport.get("code", ""))
-            var extents: Vector2 = font.get_string_size(code, HORIZONTAL_ALIGNMENT_LEFT, -1, 18)
-            draw_string(font, position - Vector2(extents.x * 0.5, -6.0), code,
-                HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(AirportPalette.MARK_WHITE, 0.75))
+func _blit_building(sprite_name: String, at: Vector2) -> void:
+    if sprite_name.is_empty():
+        return
+    var texture: Texture2D = _sprite(BUILDINGS % sprite_name)
+    if texture == null:
+        return
+    var size: Vector2 = texture.get_size()
+    draw_texture(texture, (at - size * 0.5).round())
 
-## Aircraft the airline has on the ground here, drawn on their assigned stands.
+func _draw_service_vehicles() -> void:
+    for entry: Variant in layout.get("service_points", []):
+        var point: Dictionary = entry
+        var texture: Texture2D = _sprite(VEHICLES % String(point.get("vehicle", "tug")))
+        if texture == null:
+            continue
+        var at: Vector2 = _vec(point.get("position", [0, 0]))
+        draw_texture(texture, (at - texture.get_size() * 0.5).round())
+
+## Aircraft use pre-rendered rotation frames rather than a runtime rotation,
+## which would resample the sprite and destroy its hard edges.
 func _draw_parked_aircraft() -> void:
     if sim == null:
         return
+    var font: Font = load("res://assets/art/ui/font5x7.fnt")
     for plane: AircraftInstance in sim.state.aircraft_at(airport_id):
         var place: Dictionary = stand_transform(plane.stand_id)
         if place.is_empty():
             continue
-        var family: Dictionary = sim.db.aircraft.get(plane.family_id, {})
         var at: Vector2 = place["position"]
-        var heading: float = place["heading"]
-        var running: float = _prop_phase if plane.state != AircraftInstance.State.PARKED else -1.0
+        draw_aircraft(plane.family_id, at, float(place["heading"]))
 
         if plane.id == selected_aircraft_id:
-            draw_arc(at, 78.0, 0.0, TAU, 36, Color(AirportPalette.MARK_WHITE, 0.5), 1.5)
-        AircraftArt.draw_top(self, at, heading, family, AIRCRAFT_SCALE,
-            AircraftArt.livery_color(plane.livery), running)
-
-        var font: Font = ThemeDB.fallback_font
+            var box := 30.0
+            _selection_bracket(at, box)
         var label: String = plane.display_name()
-        var extents: Vector2 = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12)
-        draw_string(font, at + Vector2(-extents.x * 0.5, 74.0), label,
-            HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(AirportPalette.MARK_WHITE, 0.8))
+        var extents: Vector2 = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 7)
+        var text_at: Vector2 = (at + Vector2(-extents.x * 0.5, 30.0)).round()
+        draw_string(font, text_at + Vector2.ONE, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 7,
+            PixelPalette.get_colour("outline"))
+        draw_string(font, text_at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 7,
+            PixelPalette.get_colour("text"))
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+func draw_aircraft(family_id: String, at: Vector2, heading: float) -> void:
+    var strip: Texture2D = _rotation_strip(family_id)
+    if strip == null:
+        return
+    var frame_size: float = strip.get_size().y
+    var frame: int = int(roundf(heading / TAU * float(ROTATION_FRAMES)))
+    frame = ((frame % ROTATION_FRAMES) + ROTATION_FRAMES) % ROTATION_FRAMES
+    var region := Rect2(Vector2(float(frame) * frame_size, 0.0), Vector2(frame_size, frame_size))
+    draw_texture_rect_region(strip,
+        Rect2((at - Vector2(frame_size, frame_size) * 0.5).round(), region.size), region)
 
-func _vec(raw: Variant) -> Vector2:
-    var array: Array = raw
-    if array.size() < 2:
-        return Vector2.ZERO
-    return Vector2(float(array[0]), float(array[1]))
-
-func _points(raw: Variant) -> PackedVector2Array:
-    var out: PackedVector2Array = []
-    for entry: Variant in (raw as Array):
-        out.append(_vec(entry))
-    return out
+## Corner brackets rather than a circle: four short pixel runs stay crisp.
+func _selection_bracket(at: Vector2, box: float) -> void:
+    var colour: Color = PixelPalette.get_colour("white")
+    var arm := 5.0
+    for corner: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+        var origin: Vector2 = (at + corner * box).round()
+        draw_rect(Rect2(origin - Vector2(arm * maxf(0.0, corner.x), 0.0), Vector2(arm, 1.0)), colour)
+        draw_rect(Rect2(origin - Vector2(0.0, arm * maxf(0.0, corner.y)), Vector2(1.0, arm)), colour)

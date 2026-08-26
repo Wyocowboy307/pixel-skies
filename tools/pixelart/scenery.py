@@ -65,10 +65,10 @@ def concrete_apron(variant: int = 0) -> Canvas:
     canvas = Canvas(TILE, TILE)
     canvas.fill("concrete")
     _speckle(canvas, "concrete_light", 8, seed=7000 + variant)
-    canvas.hline(0, TILE - 1, 0, "asphalt")
-    canvas.vline(0, 0, TILE - 1, "asphalt")
-    canvas.hline(0, TILE - 1, 1, "concrete_light")
-    canvas.vline(1, 1, TILE - 1, "concrete_light")
+    # Expansion joints, kept subtle: a hard dark joint on every tile edge makes
+    # a tiled apron read as a grid rather than as a surface.
+    canvas.hline(0, TILE - 1, 0, "taxiway")
+    canvas.vline(0, 0, TILE - 1, "taxiway")
     return canvas
 
 

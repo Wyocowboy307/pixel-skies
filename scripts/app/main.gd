@@ -5,7 +5,7 @@ extends Node2D
 
 const WORLD_ZOOM_STOP := 0
 const AIRPORT_APPROACH_STOP := 5
-const AIRPORT_CAMERA_ZOOM := 0.85
+const AIRPORT_CAMERA_ZOOM := 1.0
 
 @onready var _world: Node2D = $World
 @onready var _map: WorldMapView = $World/WorldMap

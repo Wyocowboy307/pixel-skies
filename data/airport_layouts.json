@@ -1,606 +1,133 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "_note": "Coordinates are pixels in the local airport scene, centred on (0,0), aligned to the 16px tile grid. Authored for a 640x360 screen at camera zoom 1 (docs/PIXEL_STYLE_GUIDE.md).",
   "layouts": [
     {
       "id": "layout_bzn",
       "airport_id": "apt_bzn",
       "biome": "mountain",
-      "ground_extent": [
-        1500,
-        900
-      ],
+      "ground_extent": [768, 432],
       "runway": {
-        "start": [
-          -620,
-          150
-        ],
-        "end": [
-          620,
-          150
-        ],
-        "width": 44,
-        "designations": [
-          "12",
-          "30"
-        ]
+        "start": [-288, 128],
+        "end": [288, 128],
+        "width": 32,
+        "designations": ["12", "30"]
       },
       "taxiways": [
-        {
-          "id": "twy_a",
-          "points": [
-            [
-              -470,
-              150
-            ],
-            [
-              -470,
-              20
-            ],
-            [
-              -160,
-              20
-            ]
-          ]
-        },
-        {
-          "id": "twy_b",
-          "points": [
-            [
-              470,
-              150
-            ],
-            [
-              470,
-              20
-            ],
-            [
-              160,
-              20
-            ]
-          ]
-        },
-        {
-          "id": "twy_apron",
-          "points": [
-            [
-              -160,
-              20
-            ],
-            [
-              160,
-              20
-            ]
-          ]
-        }
+        {"id": "twy_a", "points": [[-208, 128], [-208, 48], [-96, 48]], "width": 16},
+        {"id": "twy_b", "points": [[208, 128], [208, 48], [96, 48]], "width": 16},
+        {"id": "twy_apron", "points": [[-96, 48], [96, 48]], "width": 16}
       ],
-      "apron": {
-        "centre": [
-          0,
-          -40
-        ],
-        "size": [
-          480,
-          170
-        ]
-      },
+      "apron": {"centre": [0, 0], "size": [272, 80]},
       "stands": [
-        {
-          "id": "stand_1",
-          "position": [
-            -110,
-            -60
-          ],
-          "heading": 90,
-          "size": "small"
-        },
-        {
-          "id": "stand_2",
-          "position": [
-            110,
-            -60
-          ],
-          "heading": 90,
-          "size": "small"
-        }
+        {"id": "stand_1", "position": [-64, -8], "heading": -90, "size": "small"},
+        {"id": "stand_2", "position": [64, -8], "heading": -90, "size": "small"}
       ],
       "buildings": [
-        {
-          "id": "terminal",
-          "type": "terminal",
-          "position": [
-            0,
-            -170
-          ],
-          "size": [
-            300,
-            96
-          ],
-          "level": 1
-        },
-        {
-          "id": "tower",
-          "type": "tower",
-          "position": [
-            200,
-            -180
-          ],
-          "size": [
-            42,
-            42
-          ],
-          "level": 1
-        },
-        {
-          "id": "fuel",
-          "type": "fuel",
-          "position": [
-            -250,
-            -140
-          ],
-          "size": [
-            70,
-            50
-          ],
-          "level": 1
-        }
+        {"id": "terminal", "type": "terminal", "sprite": "terminal_1", "position": [0, -80], "level": 1},
+        {"id": "tower", "type": "tower", "sprite": "tower", "position": [96, -88], "level": 1},
+        {"id": "fuel", "type": "fuel", "sprite": "fuel_depot", "position": [-136, -72], "level": 1}
+      ],
+      "upgrade_slots": [
+        {"id": "slot_cargo", "visual_change": "cargo_shed", "sprite": "cargo_shed", "position": [-152, 8]},
+        {"id": "slot_hangar", "visual_change": "hangar_small", "sprite": "hangar_small", "position": [176, 0]},
+        {"id": "slot_terminal", "visual_change": "terminal_level_2", "sprite": "terminal_2", "position": [0, -80]}
       ],
       "decor": [
-        {
-          "type": "ridge",
-          "position": [
-            -520,
-            -330
-          ],
-          "size": [
-            520,
-            150
-          ]
-        },
-        {
-          "type": "ridge",
-          "position": [
-            340,
-            -350
-          ],
-          "size": [
-            640,
-            170
-          ]
-        },
-        {
-          "type": "trees",
-          "position": [
-            -560,
-            330
-          ],
-          "size": [
-            300,
-            90
-          ]
-        },
-        {
-          "type": "trees",
-          "position": [
-            430,
-            340
-          ],
-          "size": [
-            360,
-            90
-          ]
-        }
+        {"type": "trees", "position": [-224, -168], "size": [280, 72]},
+        {"type": "ridge", "position": [140, -176], "size": [340, 80]},
+        {"type": "trees", "position": [-176, 200], "size": [220, 56]},
+        {"type": "trees", "position": [216, 204], "size": [240, 52]}
+      ],
+      "service_points": [
+        {"id": "svc_1", "position": [-136, -40], "vehicle": "fuel_truck"},
+        {"id": "svc_2", "position": [128, 24], "vehicle": "tug"}
       ]
     },
     {
       "id": "layout_bil",
       "airport_id": "apt_bil",
       "biome": "plains",
-      "ground_extent": [
-        1500,
-        900
-      ],
+      "ground_extent": [768, 432],
       "runway": {
-        "start": [
-          -640,
-          140
-        ],
-        "end": [
-          640,
-          140
-        ],
-        "width": 44,
-        "designations": [
-          "10",
-          "28"
-        ]
+        "start": [-288, 128],
+        "end": [288, 128],
+        "width": 32,
+        "designations": ["10", "28"]
       },
       "taxiways": [
-        {
-          "id": "twy_a",
-          "points": [
-            [
-              -430,
-              140
-            ],
-            [
-              -430,
-              10
-            ],
-            [
-              -140,
-              10
-            ]
-          ]
-        },
-        {
-          "id": "twy_b",
-          "points": [
-            [
-              430,
-              140
-            ],
-            [
-              430,
-              10
-            ],
-            [
-              140,
-              10
-            ]
-          ]
-        },
-        {
-          "id": "twy_apron",
-          "points": [
-            [
-              -140,
-              10
-            ],
-            [
-              140,
-              10
-            ]
-          ]
-        }
+        {"id": "twy_a", "points": [[-192, 128], [-192, 48], [-96, 48]], "width": 16},
+        {"id": "twy_b", "points": [[192, 128], [192, 48], [96, 48]], "width": 16},
+        {"id": "twy_apron", "points": [[-96, 48], [96, 48]], "width": 16}
       ],
-      "apron": {
-        "centre": [
-          0,
-          -50
-        ],
-        "size": [
-          440,
-          160
-        ]
-      },
+      "apron": {"centre": [0, 0], "size": [256, 80]},
       "stands": [
-        {
-          "id": "stand_1",
-          "position": [
-            -100,
-            -70
-          ],
-          "heading": 90,
-          "size": "small"
-        },
-        {
-          "id": "stand_2",
-          "position": [
-            100,
-            -70
-          ],
-          "heading": 90,
-          "size": "small"
-        }
+        {"id": "stand_1", "position": [-64, -8], "heading": -90, "size": "small"},
+        {"id": "stand_2", "position": [64, -8], "heading": -90, "size": "small"}
       ],
       "buildings": [
-        {
-          "id": "terminal",
-          "type": "terminal",
-          "position": [
-            0,
-            -170
-          ],
-          "size": [
-            260,
-            88
-          ],
-          "level": 1
-        },
-        {
-          "id": "cargo",
-          "type": "cargo",
-          "position": [
-            -260,
-            -150
-          ],
-          "size": [
-            120,
-            70
-          ],
-          "level": 1
-        }
+        {"id": "terminal", "type": "terminal", "sprite": "terminal_1", "position": [0, -80], "level": 1},
+        {"id": "cargo", "type": "cargo", "sprite": "cargo_shed", "position": [-160, -64], "level": 1}
+      ],
+      "upgrade_slots": [
+        {"id": "slot_hangar", "visual_change": "hangar_small", "sprite": "hangar_small", "position": [176, -8]},
+        {"id": "slot_terminal", "visual_change": "terminal_level_2", "sprite": "terminal_2", "position": [0, -80]}
       ],
       "decor": [
-        {
-          "type": "fields",
-          "position": [
-            -460,
-            -330
-          ],
-          "size": [
-            560,
-            160
-          ]
-        },
-        {
-          "type": "fields",
-          "position": [
-            420,
-            -340
-          ],
-          "size": [
-            520,
-            150
-          ]
-        },
-        {
-          "type": "fields",
-          "position": [
-            0,
-            350
-          ],
-          "size": [
-            900,
-            120
-          ]
-        }
+        {"type": "fields", "position": [-192, -176], "size": [304, 80]},
+        {"type": "fields", "position": [200, -180], "size": [288, 72]},
+        {"type": "fields", "position": [0, 208], "size": [560, 56]}
+      ],
+      "service_points": [
+        {"id": "svc_1", "position": [-128, 24], "vehicle": "tug"}
       ]
     },
     {
       "id": "layout_den",
       "airport_id": "apt_den",
       "biome": "highplains",
-      "ground_extent": [
-        2000,
-        1200
-      ],
+      "ground_extent": [960, 544],
       "runway": {
-        "start": [
-          -880,
-          250
-        ],
-        "end": [
-          880,
-          250
-        ],
-        "width": 56,
-        "designations": [
-          "17",
-          "35"
-        ]
+        "start": [-384, 176],
+        "end": [384, 176],
+        "width": 32,
+        "designations": ["17", "35"]
       },
       "secondary_runways": [
-        {
-          "start": [
-            -880,
-            -330
-          ],
-          "end": [
-            880,
-            -330
-          ],
-          "width": 56,
-          "designations": [
-            "16",
-            "34"
-          ]
-        }
+        {"start": [-384, -192], "end": [384, -192], "width": 32, "designations": ["16", "34"]}
       ],
       "taxiways": [
-        {
-          "id": "twy_a",
-          "points": [
-            [
-              -660,
-              250
-            ],
-            [
-              -660,
-              90
-            ],
-            [
-              -360,
-              90
-            ]
-          ]
-        },
-        {
-          "id": "twy_b",
-          "points": [
-            [
-              660,
-              250
-            ],
-            [
-              660,
-              90
-            ],
-            [
-              360,
-              90
-            ]
-          ]
-        },
-        {
-          "id": "twy_apron",
-          "points": [
-            [
-              -360,
-              90
-            ],
-            [
-              360,
-              90
-            ]
-          ]
-        },
-        {
-          "id": "twy_north",
-          "points": [
-            [
-              -660,
-              -330
-            ],
-            [
-              -660,
-              -180
-            ],
-            [
-              -360,
-              -180
-            ]
-          ]
-        },
-        {
-          "id": "twy_north_b",
-          "points": [
-            [
-              660,
-              -330
-            ],
-            [
-              660,
-              -180
-            ],
-            [
-              360,
-              -180
-            ]
-          ]
-        }
+        {"id": "twy_a", "points": [[-288, 176], [-288, 80], [-176, 80]], "width": 16},
+        {"id": "twy_b", "points": [[288, 176], [288, 80], [176, 80]], "width": 16},
+        {"id": "twy_apron", "points": [[-176, 80], [176, 80]], "width": 16},
+        {"id": "twy_n", "points": [[-288, -192], [-288, -112], [-176, -112]], "width": 16},
+        {"id": "twy_n_b", "points": [[288, -192], [288, -112], [176, -112]], "width": 16}
       ],
-      "apron": {
-        "centre": [
-          0,
-          -30
-        ],
-        "size": [
-          1020,
-          230
-        ]
-      },
+      "apron": {"centre": [0, 8], "size": [448, 96]},
       "stands": [
-        {
-          "id": "stand_1",
-          "position": [
-            -380,
-            -60
-          ],
-          "heading": 90,
-          "size": "medium"
-        },
-        {
-          "id": "stand_2",
-          "position": [
-            -190,
-            -60
-          ],
-          "heading": 90,
-          "size": "medium"
-        },
-        {
-          "id": "stand_3",
-          "position": [
-            0,
-            -60
-          ],
-          "heading": 90,
-          "size": "large"
-        },
-        {
-          "id": "stand_4",
-          "position": [
-            190,
-            -60
-          ],
-          "heading": 90,
-          "size": "medium"
-        },
-        {
-          "id": "stand_5",
-          "position": [
-            380,
-            -60
-          ],
-          "heading": 90,
-          "size": "medium"
-        }
+        {"id": "stand_1", "position": [-160, 0], "heading": -90, "size": "medium"},
+        {"id": "stand_2", "position": [-80, 0], "heading": -90, "size": "medium"},
+        {"id": "stand_3", "position": [0, 0], "heading": -90, "size": "large"},
+        {"id": "stand_4", "position": [80, 0], "heading": -90, "size": "medium"},
+        {"id": "stand_5", "position": [160, 0], "heading": -90, "size": "medium"}
       ],
       "buildings": [
-        {
-          "id": "terminal",
-          "type": "terminal",
-          "position": [
-            0,
-            -200
-          ],
-          "size": [
-            720,
-            130
-          ],
-          "level": 3
-        },
-        {
-          "id": "tower",
-          "type": "tower",
-          "position": [
-            -420,
-            -230
-          ],
-          "size": [
-            54,
-            54
-          ],
-          "level": 2
-        },
-        {
-          "id": "cargo",
-          "type": "cargo",
-          "position": [
-            520,
-            -210
-          ],
-          "size": [
-            220,
-            96
-          ],
-          "level": 2
-        }
+        {"id": "terminal", "type": "terminal", "sprite": "terminal_3", "position": [0, -80], "level": 3},
+        {"id": "tower", "type": "tower", "sprite": "tower", "position": [-208, -96], "level": 2},
+        {"id": "cargo", "type": "cargo", "sprite": "cargo_shed", "position": [256, -72], "level": 2}
+      ],
+      "upgrade_slots": [
+        {"id": "slot_hangar", "visual_change": "hangar_small", "sprite": "hangar_small", "position": [-288, 8]}
       ],
       "decor": [
-        {
-          "type": "scrub",
-          "position": [
-            -700,
-            480
-          ],
-          "size": [
-            520,
-            120
-          ]
-        },
-        {
-          "type": "scrub",
-          "position": [
-            560,
-            500
-          ],
-          "size": [
-            560,
-            120
-          ]
-        }
+        {"type": "scrub", "position": [-304, 248], "size": [280, 56]},
+        {"type": "scrub", "position": [288, 252], "size": [300, 56]},
+        {"type": "scrub", "position": [0, -280], "size": [640, 48]}
+      ],
+      "service_points": [
+        {"id": "svc_1", "position": [-224, 40], "vehicle": "fuel_truck"},
+        {"id": "svc_2", "position": [224, 40], "vehicle": "tug"},
+        {"id": "svc_3", "position": [96, 56], "vehicle": "baggage_cart"}
       ]
     }
   ]

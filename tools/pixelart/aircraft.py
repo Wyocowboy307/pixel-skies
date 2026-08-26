@@ -478,3 +478,50 @@ def _leg(canvas: Canvas, x: int, top: int, ground: int, wheel: float) -> None:
     canvas.vline(x, top, round(ground - radius), "metal_dark")
     canvas.disc(x, ground - radius, radius, "asphalt_dark")
     canvas.plot(x, round(ground - radius), "metal")
+
+
+# ---------------------------------------------------------------------------
+# Rotation frames
+# ---------------------------------------------------------------------------
+
+ROTATION_FRAMES = 16
+
+
+def build_rotation_strip(spec: AircraftSpec) -> Canvas:
+    """A horizontal strip of pre-rotated top views, one per heading.
+
+    Pixel art must not be rotated at runtime: an arbitrary angle resamples the
+    sprite and destroys the hard edges the whole style depends on. Instead the
+    engine picks the nearest of these frames, which is how sprite-based games
+    have always handled directional art.
+
+    Frame 0 points east (+x), matching the source sprite, and frames advance
+    clockwise in screen space.
+    """
+    from PIL import Image
+
+    source = build_top(spec).to_image()
+    size = spec.canvas_top
+    strip = Canvas(size * ROTATION_FRAMES, size)
+    for index in range(ROTATION_FRAMES):
+        degrees = -index * (360.0 / ROTATION_FRAMES)
+        # PIL rotates counter-clockwise; negating gives clockwise screen order.
+        rotated = source.rotate(degrees, resample=Image.NEAREST, expand=False)
+        frame = Canvas(size, size)
+        frame.data[:] = _to_rgba(rotated)
+        _harden(frame)
+        strip.blit(frame, index * size, 0)
+    return strip
+
+
+def _to_rgba(image) -> "object":
+    import numpy as np
+    return np.array(image.convert("RGBA"), dtype=np.uint8)
+
+
+def _harden(canvas: Canvas) -> None:
+    """Rotation can leave stray semi-transparent pixels at the seams; the style
+    guide allows only alpha 0 or 255, so they are snapped one way or the other."""
+    alpha = canvas.data[:, :, 3]
+    canvas.data[alpha < 128] = (0, 0, 0, 0)
+    canvas.data[alpha >= 128, 3] = 255
