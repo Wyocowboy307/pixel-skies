@@ -7,6 +7,10 @@ config/name="Pixel Skies"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
+[autoload]
+
+DevCapture="*res://scripts/dev/dev_capture.gd"
+
 [display]
 window/size/viewport_width=1280
 window/size/viewport_height=720
