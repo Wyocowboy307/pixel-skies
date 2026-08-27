@@ -167,6 +167,7 @@ def _top_wing(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
     chord = max(3, round(spec.wing_chord_m * ppm))
     leading = nose - round(spec.length_m * spec.wing_x_frac * ppm)
     tip_round = max(1, half_span // 8)
+    tip_band = max(2, half_span // 7)
     for dy in range(0, half_span + 1):
         t = dy / max(1, half_span)
         # Taper only, no sweep: at this sprite size a swept leading edge turns
@@ -181,7 +182,9 @@ def _top_wing(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
             tip_chord = max(1, tip_chord - inset)
         x_trail = x_lead - tip_chord
         for x in range(x_trail, x_lead + 1):
-            if x >= x_lead - 1:
+            if half_span - dy <= tip_band:
+                colour = livery["trim"]         # wingtip flash, from the master
+            elif x >= x_lead - 1:
                 colour = livery["light"]        # lit leading edge
             elif x <= x_trail + 1:
                 colour = livery["dark"]         # shadowed trailing edge
@@ -236,14 +239,16 @@ def _top_engines(canvas: Canvas, spec: AircraftSpec, ctx: dict) -> None:
                             _shade(dy, nacelle_half, "metal_light", "metal", "metal_dark"))
         _top_prop(canvas, front + 1, centre, prop_half)
     else:
-        cowl = max(2, round(ctx["length"] * 0.12))
+        # The orange cowl from the side-view master, so top and side read as the
+        # same aircraft at a glance.
+        cowl = max(2, round(ctx["length"] * 0.14))
         half_max = max(2, round(spec.fuselage_width_m * ppm * 0.5))
         for x in range(nose - cowl, nose + 1):
             back = nose - x
             half = max(1, round(half_max * (0.5 + 0.5 * back / cowl)))
             for dy in range(-half, half + 1):
                 canvas.plot(x, axis + dy,
-                            _shade(dy, half, "metal_light", "metal", "metal_dark"))
+                            _shade(dy, half, "accent_orange_light", "accent_orange", "accent_red"))
         _top_prop(canvas, nose + 1, axis, prop_half)
 
 

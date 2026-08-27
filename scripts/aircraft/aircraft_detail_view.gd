@@ -557,7 +557,7 @@ func _draw_hero(plane: AircraftInstance) -> void:
     # visibly empty places, not four dark rectangles.
     var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
     var seat_anchors: Array = _anchors.get("seats", [])
-    var empty_seat: Texture2D = _texture("ui/seat_empty.png")
+    var empty_seat: Texture2D = _texture(_seat_art())
     if empty_seat != null:
         for i in range(seat_index, mini(int(limits["seats"]), seat_anchors.size())):
             var centre: Vector2 = _slot_screen_position(true, i)
@@ -567,7 +567,7 @@ func _draw_hero(plane: AircraftInstance) -> void:
 ## Unfilled seats and hold slots are dashed outlines inside the aircraft, so
 ## spare capacity is something you see in the plane, not just a number.
 func _draw_empty_slots(plane: AircraftInstance, seats_used: int, cargo_used: int) -> void:
-    var empty: Texture2D = _texture("ui/seat_empty.png")
+    var empty: Texture2D = _texture(_seat_art())
     if empty == null:
         return
     var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
@@ -590,7 +590,7 @@ func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String
     if is_seat:
         # The seat stays under its passenger: an occupied place reads as a
         # person sitting in a seat, not a person floating in the cabin.
-        var seat: Texture2D = _texture("ui/seat_empty.png")
+        var seat: Texture2D = _texture(_seat_art())
         if seat != null:
             var seat_drawn: Vector2 = seat.get_size() * float(HERO_SCALE)
             draw_texture_rect(seat, Rect2((centre - seat_drawn * 0.5).round(), seat_drawn), false)
@@ -599,6 +599,10 @@ func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String
     if is_seat:
         at += Vector2(1.0, -1.0)      # perched on the cushion, not sunk in it
     draw_texture_rect(texture, Rect2(at, drawn), false)
+
+## Tight generated cabins use the 8px seat; roomy ones the 11px.
+func _seat_art() -> String:
+    return "ui/seat_small.png" if int(_anchors.get("seat_slot", 10)) <= 8 else "ui/seat_empty.png"
 
 func _payload_texture(is_seat: bool, variant: int, presentation: String) -> Texture2D:
     if is_seat:

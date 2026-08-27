@@ -36,13 +36,13 @@ const ACCENT_SETS := {
 ## Which palette keys count as body/accent in the source art, by shading role.
 ## Includes both the pipeline keys and the keys PixelLab approvals snap to.
 const BODY_SRC := {
-    "light": ["livery_light", "panel_light"],
-    "base": ["livery", "panel_shade"],
+    "light": ["livery_light", "panel_light", "map_desert_light", "card"],
+    "base": ["livery", "panel_shade", "map_desert"],
     "dark": ["livery_dark", "sand_light", "sand"],
 }
 const ACCENT_SRC := {
-    "light": ["accent_orange_light"],
-    "base": ["accent_orange"],
+    "light": ["accent_orange_light", "accent_yellow"],
+    "base": ["accent_orange", "btn_red"],
     "dark": ["accent_red"],
 }
 

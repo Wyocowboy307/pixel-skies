@@ -518,3 +518,17 @@ def cloud(width: int, height: int, seed: int) -> Canvas:
 CLOUDS: list[tuple[str, int, int, int]] = [
     ("cloud_0", 24, 12, 41), ("cloud_1", 36, 16, 42), ("cloud_2", 48, 20, 43),
 ]
+
+
+def seat_small() -> Canvas:
+    """The 8px seat for tight generated cabins."""
+    canvas = Canvas(8, 8)
+    canvas.rect(1, 0, 3, 2, "accent_red")           # headrest
+    canvas.rect(1, 2, 2, 4, "accent_orange")        # backrest
+    canvas.rect(1, 4, 6, 2, "accent_orange")        # cushion
+    canvas.hline(1, 6, 4, "accent_orange_light")
+    canvas.hline(1, 6, 6, "accent_red")
+    canvas.plot(2, 7, "soil")
+    canvas.plot(5, 7, "soil")
+    canvas.outline()
+    return canvas
