@@ -426,6 +426,75 @@ def seated_passenger(shirt: str = "accent_teal", hair: str = "soil") -> Canvas:
     return canvas
 
 
+## Cabin-strip passengers: (skin, hair, shirt, trousers, style) per variant.
+## Style picks the one identifying accessory so a full cabin reads as six
+## different people, not one sprite six times.
+CABIN_PASSENGERS: list[tuple[str, str, str, str, str]] = [
+    ("sand_light", "soil", "accent_teal", "asphalt", "plain"),
+    ("sand_light", "accent_yellow", "accent_orange", "navy", "bob"),
+    ("sand", "outline", "btn_green", "metal_dark", "cap"),
+    ("sand_light", "metal_light", "btn_blue", "soil", "bald"),
+    ("sand_light", "accent_red", "livery_light", "navy", "ponytail"),
+    ("sand", "outline", "accent_yellow", "asphalt", "beanie"),
+]
+
+
+def cabin_passenger(variant: int) -> Canvas:
+    """A seated passenger, side view facing right, sized for the curated
+    library cabin seat (57x98). Head against the headrest, forearm on the
+    armrest, legs bent to the floor. Drawn to the library's outline weight so
+    it sits inside the approved seat without looking pasted on.
+    """
+    skin, hair, shirt, trousers, style = CABIN_PASSENGERS[
+        variant % len(CABIN_PASSENGERS)]
+    canvas = Canvas(46, 96)
+
+    # Legs first so the torso overlaps the hip cleanly.
+    canvas.rect(12, 50, 26, 12, trousers)        # thigh
+    canvas.rect(30, 58, 9, 26, trousers)         # shin
+    canvas.rect(30, 84, 14, 7, "outline")        # shoe
+    canvas.rect(31, 84, 11, 5, "soil" if trousers != "soil" else "asphalt")
+
+    # Torso, leaning into the seat back.
+    canvas.rect(9, 24, 17, 30, shirt)
+    canvas.rect(11, 50, 18, 6, shirt)            # lap
+    canvas.hline(10, 24, 27, "white")            # collar
+    # Arm: shoulder down, forearm resting forward on the armrest.
+    canvas.rect(14, 28, 8, 14, shirt)
+    canvas.rect(16, 40, 16, 7, shirt)
+    canvas.rect(30, 41, 6, 5, skin)              # hand
+
+    # Head.
+    canvas.ellipse(17.0, 13.0, 8.5, 9.5, skin)
+    canvas.plot(23, 12, "outline")               # eye, facing right
+    canvas.hline(23, 25, 17, skin)               # nose nub row keeps chin round
+    if style == "bald":
+        canvas.hline(11, 15, 6, hair)            # trace at the temple
+    elif style == "cap":
+        canvas.rect(9, 2, 16, 7, "accent_red")
+        canvas.hline(9, 28, 8, "accent_red")     # brim forward
+        canvas.hline(10, 20, 10, hair)
+    elif style == "beanie":
+        canvas.rect(9, 2, 16, 8, "navy")
+        canvas.hline(9, 24, 9, "navy")
+        canvas.hline(9, 24, 10, "ice")           # fold
+    elif style == "bob":
+        canvas.rect(9, 3, 15, 12, hair)
+        canvas.rect(9, 14, 5, 8, hair)           # curtain over the ear
+        canvas.hline(20, 24, 4, hair)
+    elif style == "ponytail":
+        canvas.rect(9, 3, 15, 9, hair)
+        canvas.rect(6, 10, 5, 16, hair)          # tail behind the headrest
+        canvas.hline(20, 24, 4, hair)
+    else:                                        # plain crop
+        canvas.rect(9, 3, 15, 8, hair)
+        canvas.hline(9, 12, 11, hair)
+        canvas.hline(20, 24, 4, hair)
+
+    canvas.outline()
+    return canvas
+
+
 def cabin_crate(kind: str = "box") -> Canvas:
     """A crate sized for a cargo bay slot."""
     canvas = Canvas(9, 9)

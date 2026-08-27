@@ -1,26 +1,53 @@
 class_name AircraftDetailView
 extends Control
-## The plane screen: one aircraft, large, with its actual load visible inside it.
+## The plane screen: the aircraft outside on the apron, and its cabin below as
+## a side-view cross-section built from the curated interior art.
 ##
-## This is the management screen, not a status readout. Everything the player
-## needs for the core loop is here and in that order:
+## Top half: the hero aircraft in good weather. Bottom half: THE CABIN STRIP —
+## a slice through the fuselage with a luggage hold at the tail, a row of real
+## passenger seats, oval portholes in the wall and a galley trolley up front.
+## Loading is visible furniture: each passenger fills a seat, each cargo unit
+## drops a bag in the hold. A full plane looks busy; an empty one looks like an
+## empty cabin, not a form with zeroes in it.
 ##
 ##     here is my plane -> here are the jobs -> these fit -> where to -> fly
-##
-## Secondary numbers (range, condition, runway, logbook) live in a strip that
-## stays shut unless asked for. A screen that leads with them is a maintenance
-## dashboard, which is what this replaces.
 
 signal closed()
 signal dispatched(flight_id: String)
 signal customize_requested(aircraft_id: String)
 signal upgrade_requested(aircraft_id: String)
+## A payload sprite finished its hop into the cabin. A sound layer can sit on
+## this without the view knowing it exists.
+signal payload_boarded(is_seat: bool)
 
 const HERO_SCALE := 2
-const HERO_TOP := 40.0
-const GROUND_Y := 236.0
+const APRON_Y := 164.0            ## wheel line the hero stands on
+const APRON_BOTTOM := 212.0
+const STRIP_TOP := 212.0          ## fuselage cross-section band
+const STRIP_BOTTOM := 352.0
+const WALL_TOP := 220.0           ## interior wall inside the skin
+const FLOOR_TOP := 340.0
+const SEAT_Y := 246.0             ## seat sprite top (98 tall, feet in carpet)
+const SEAT_W := 57.0
+const SEAT_PITCH := 60.0
+const SEAT_ZONE_X := 222.0        ## first seat, after the hold + bulkhead door
+const SEAT_POSITIONS := 6         ## four base seats + two from Cabin Plus
+const HOLD_X := 8.0
+const HOLD_W := 138.0
 const PANEL_W := 170.0
 const TRAVEL_SECONDS := 0.42
+
+## Hold luggage: art and top-left position per cargo slot, floor-first so a
+## filling hold stacks upward like someone actually loaded it.
+const HOLD_SLOTS: Array = [
+    ["cabin/bag_duffel_navy.png", Vector2(14.0, 291.0)],
+    ["cabin/bag_duffel_grey.png", Vector2(78.0, 290.0)],
+    ["cabin/bag_case_blue.png", Vector2(18.0, 222.0)],
+    ["cabin/bag_backpack.png", Vector2(80.0, 222.0)],
+    ["cabin/bag_duffel_black.png", Vector2(42.0, 178.0)],
+    ["cabin/bag_case_blue.png", Vector2(96.0, 153.0)],
+]
+const PASSENGER_VARIANTS := 6
 
 var sim: Simulation
 var aircraft_id := ""
@@ -32,7 +59,6 @@ var _hero_origin := Vector2.ZERO
 
 var _title: Label
 var _subtitle: Label
-var _fullness: Label
 var _notice: Label
 var _fly_button: Button
 var _job_panel: PanelContainer
@@ -66,9 +92,8 @@ func bind(simulation: Simulation, id: String) -> void:
     _load_anchors()
     refresh()
 
-## Seat and cargo positions come from the sprite's own metadata, emitted by the
-## art pipeline. Where a passenger sits is a property of the drawing, so it is
-## shipped with the drawing rather than guessed here.
+## The hero sprite's baseline comes from the art pipeline's anchor metadata, so
+## the aircraft stands on its wheels regardless of canvas margins.
 func _load_anchors() -> void:
     _anchors = {}
     var plane: AircraftInstance = _plane()
@@ -106,6 +131,8 @@ func _process(delta: float) -> void:
         item["t"] = float(item["t"]) + delta / TRAVEL_SECONDS
         if float(item["t"]) < 1.0:
             still.append(item)
+        else:
+            payload_boarded.emit(bool(item["seat"]))
     _in_transit = still
     queue_redraw()
 
@@ -132,12 +159,13 @@ func _build_chrome() -> void:
     back.pressed.connect(func() -> void: closed.emit())
     header.add_child(back)
 
-    # The three actions the loop is made of, given equal prominence.
+    # One row on the tarmac between the aircraft and its cabin: the three verbs
+    # of the loop at full size, the two workshop doors small beside them.
     var actions := HBoxContainer.new()
     actions.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    actions.offset_top = 252.0
-    actions.offset_left = -160.0
-    actions.offset_right = 160.0
+    actions.offset_top = 170.0
+    actions.offset_left = -210.0
+    actions.offset_right = 210.0
     actions.alignment = BoxContainer.ALIGNMENT_CENTER
     actions.add_theme_constant_override("separation", 8)
     add_child(actions)
@@ -151,25 +179,19 @@ func _build_chrome() -> void:
     _fly_button = UiTheme.big_button("FLY", "orange")
     _fly_button.pressed.connect(_on_fly)
     actions.add_child(_fly_button)
-
-    var secondary := HBoxContainer.new()
-    secondary.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    secondary.offset_top = 284.0
-    secondary.offset_left = -120.0
-    secondary.offset_right = 120.0
-    secondary.alignment = BoxContainer.ALIGNMENT_CENTER
-    secondary.add_theme_constant_override("separation", 5)
-    add_child(secondary)
+    var spacer := Control.new()
+    spacer.custom_minimum_size = Vector2(6.0, 0.0)
+    actions.add_child(spacer)
     var customize := UiTheme.button("CUSTOMIZE")
     customize.pressed.connect(func() -> void: customize_requested.emit(aircraft_id))
-    secondary.add_child(customize)
+    actions.add_child(customize)
     var upgrade := UiTheme.button("UPGRADE")
     upgrade.pressed.connect(func() -> void: upgrade_requested.emit(aircraft_id))
-    secondary.add_child(upgrade)
+    actions.add_child(upgrade)
 
-    _notice = UiTheme.label("", "accent_red")
+    _notice = UiTheme.label("", "accent_orange_light")
     _notice.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    _notice.offset_top = 278.0
+    _notice.offset_top = 203.0
     _notice.offset_left = -150.0
     _notice.offset_right = 150.0
     _notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -192,7 +214,7 @@ func _side_panel(on_left: bool) -> PanelContainer:
         panel.offset_left = -6.0 - PANEL_W
         panel.offset_right = -6.0
     panel.offset_top = 40.0
-    panel.offset_bottom = -66.0
+    panel.offset_bottom = -30.0
     panel.visible = false
     add_child(panel)
     return panel
@@ -253,9 +275,7 @@ func refresh() -> void:
     _title.text = plane.display_name().to_upper()
     _subtitle.text = String(family.get("name", "")).to_upper()
 
-    var limits: Dictionary = Rules.capacity(family, plane.configuration)
     var loaded: Array[Job] = sim.state.loaded_jobs(plane.id)
-    var used: Dictionary = Rules.load_used(loaded)
 
     var flying: bool = plane.state == AircraftInstance.State.IN_FLIGHT
     _fly_button.disabled = flying or loaded.is_empty() or _selected_destination.is_empty()
@@ -346,49 +366,34 @@ func _job_face(job: Job) -> Texture2D:
         kind = "livestock"
     return _texture("cargo/crate_%s.png" % kind)
 
-## Loading is a physical act: the passenger leaves the list and travels to the
-## seat it will occupy. Without that the manifest just silently changes.
+## Loading is a physical act: the passenger leaves the list, hops across the
+## screen and lands in the seat they will occupy. Without that the manifest
+## just silently changes.
 func _on_load_job(job: Job, from_control: Control) -> void:
     var plane: AircraftInstance = _plane()
-    var before: int = sim.state.loaded_jobs(plane.id).size()
+    var used_before: Dictionary = Rules.load_used(sim.state.loaded_jobs(plane.id))
     var result: Dictionary = sim.load_job(aircraft_id, job.id)
     if not bool(result["ok"]):
         _notice.text = String(result["reason"])
         return
     _notice.text = ""
-    var slot_index: int = _next_free_slot(job.seats > 0, before)
+    var is_seat: bool = job.seats > 0
+    var first_index: int = int(used_before["seats"]) if is_seat \
+        else int(used_before["cargo_units"])
     # The hop starts where the passenger's face (or the crate) sits on the card.
-    var origin: Vector2 = from_control.global_position + Vector2(19.0, from_control.size.y * 0.5)
-    var target: Vector2 = _slot_screen_position(job.seats > 0, slot_index)
-    var count: int = job.seats if job.seats > 0 else job.cargo_units
+    var origin: Vector2 = from_control.global_position \
+        + Vector2(from_control.size.x + 14.0, from_control.size.y * 0.5)
+    var count: int = job.seats if is_seat else job.cargo_units
     for i in range(count):
         _in_transit.append({
             "t": -0.12 * float(i),          # staggered, so a group boards in file
             "from": origin,
-            "to": _slot_screen_position(job.seats > 0, slot_index + i),
-            "seat": job.seats > 0,
-            "variant": (slot_index + i) % 5,
-            "kind": job.presentation,
+            "to": _slot_screen_position(is_seat, first_index + i),
+            "seat": is_seat,
+            "index": first_index + i,
+            "variant": (first_index + i) % PASSENGER_VARIANTS,
         })
     refresh()
-
-func _next_free_slot(is_seat: bool, _before: int) -> int:
-    var plane: AircraftInstance = _plane()
-    var used := 0
-    for other: Job in sim.state.loaded_jobs(plane.id):
-        used += other.seats if is_seat else other.cargo_units
-    var count: int = 0
-    for other: Job in sim.state.loaded_jobs(plane.id):
-        count += other.seats if is_seat else other.cargo_units
-    return maxi(0, count - _slot_count_of_last(is_seat))
-
-func _slot_count_of_last(is_seat: bool) -> int:
-    var plane: AircraftInstance = _plane()
-    var loaded: Array[Job] = sim.state.loaded_jobs(plane.id)
-    if loaded.is_empty():
-        return 0
-    var last: Job = loaded[loaded.size() - 1]
-    return last.seats if is_seat else last.cargo_units
 
 func _refresh_routes() -> void:
     for child: Node in _route_list.get_children():
@@ -465,14 +470,19 @@ func _on_fly() -> void:
 # Drawing
 # ---------------------------------------------------------------------------
 
+func _seat_position(index: int) -> Vector2:
+    return Vector2(SEAT_ZONE_X + float(index) * SEAT_PITCH, SEAT_Y)
+
+## Where a payload lands, in this control's coordinates. Seats are passenger
+## chest height; cargo is the centre of the bag that will appear.
 func _slot_screen_position(is_seat: bool, index: int) -> Vector2:
-    var list: Array = _anchors.get("seats" if is_seat else "cargo", [])
-    if list.is_empty():
-        return _hero_origin
-    var entry: Array = list[clampi(index, 0, list.size() - 1)]
-    var slot: float = float(_anchors.get("seat_slot" if is_seat else "cargo_slot", 11))
-    return _hero_origin + (Vector2(float(entry[0]), float(entry[1]))
-        + Vector2(slot, slot) * 0.5) * float(HERO_SCALE)
+    if is_seat:
+        var seat: Vector2 = _seat_position(clampi(index, 0, SEAT_POSITIONS - 1))
+        return (seat + Vector2(35.0, 34.0)).round()
+    var slot: Array = HOLD_SLOTS[clampi(index, 0, HOLD_SLOTS.size() - 1)]
+    var texture: Texture2D = _texture(String(slot[0]))
+    var half: Vector2 = texture.get_size() * 0.5 if texture != null else Vector2(24.0, 20.0)
+    return ((slot[1] as Vector2) + half).round()
 
 func _text(at: Vector2, value: String, colour_key: String = "ink") -> void:
     draw_string(_font, at.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, 7, _colour(colour_key))
@@ -483,36 +493,33 @@ func _draw() -> void:
         return
     _draw_scene()
     _draw_hero(plane)
+    _draw_cabin(plane)
     _draw_route_strip(plane)
-    _draw_fullness(plane)
     _draw_in_transit()
 
-## Good weather on the apron, not a dark instrument bay.
+## Good weather on the apron above, the cabin cross-section below.
 func _draw_scene() -> void:
     draw_rect(Rect2(Vector2.ZERO, size), _colour("sky"))
     draw_rect(Rect2(Vector2(0.0, 0.0), Vector2(size.x, 22.0)), _colour("panel_deep"))
     _draw_clouds()
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y), Vector2(size.x, size.y - GROUND_Y)),
-        _colour("grass"))
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y), Vector2(size.x, 2.0)), _colour("grass_light"))
-    # Scattered grass tufts, seeded off position so they never crawl.
-    for i in range(26):
-        var gx: float = float((i * 97) % int(size.x))
-        var gy: float = GROUND_Y + 6.0 + float((i * 37) % 40)
-        if gy < size.y - 2.0:
-            draw_rect(Rect2(Vector2(gx, gy), Vector2(2.0, 1.0)), _colour("grass_dark"))
-    # Apron strip the aircraft actually stands on.
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y - 10.0), Vector2(size.x, 10.0)), _colour("concrete"))
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y - 10.0), Vector2(size.x, 1.0)), _colour("concrete_light"))
-    for x in range(0, int(size.x), 48):
-        draw_rect(Rect2(Vector2(float(x), GROUND_Y - 9.0), Vector2(1.0, 9.0)), _colour("taxiway"))
+    # A line of distant grass, then the concrete the aircraft stands on.
+    draw_rect(Rect2(Vector2(0.0, APRON_Y - 8.0), Vector2(size.x, 4.0)), _colour("grass"))
+    draw_rect(Rect2(Vector2(0.0, APRON_Y - 4.0), Vector2(size.x, 2.0)), _colour("grass_dark"))
+    draw_rect(Rect2(Vector2(0.0, APRON_Y - 2.0), Vector2(size.x, APRON_BOTTOM - APRON_Y + 2.0)),
+        _colour("concrete"))
+    draw_rect(Rect2(Vector2(0.0, APRON_Y - 2.0), Vector2(size.x, 1.0)), _colour("concrete_light"))
+    for x in range(24, int(size.x), 48):
+        draw_rect(Rect2(Vector2(float(x), APRON_Y + 4.0), Vector2(1.0, 6.0)), _colour("taxiway"))
+    for x in range(8, int(size.x), 34):
+        draw_rect(Rect2(Vector2(float(x), APRON_Y + 20.0), Vector2(18.0, 2.0)),
+            _colour("accent_yellow"))
 
 ## Chunky drifting clouds. Full-width bands read as a barcode, not as weather.
 func _draw_clouds() -> void:
     var drift: float = fposmod(_clock * 5.0, size.x + 140.0)
     var seeds: Array[Vector2] = [
-        Vector2(40.0, 44.0), Vector2(210.0, 70.0), Vector2(390.0, 40.0),
-        Vector2(520.0, 78.0), Vector2(120.0, 108.0), Vector2(460.0, 118.0),
+        Vector2(40.0, 38.0), Vector2(210.0, 62.0), Vector2(390.0, 34.0),
+        Vector2(520.0, 70.0), Vector2(120.0, 96.0), Vector2(460.0, 104.0),
     ]
     for index in range(seeds.size()):
         var seed: Vector2 = seeds[index]
@@ -526,95 +533,148 @@ func _draw_clouds() -> void:
             draw_rect(Rect2(Vector2(bx, by), Vector2(w, h)),
                 _colour("sky_light" if block % 2 == 0 else "white"))
 
-## The aircraft with its actual manifest inside it, drawn at a whole-number
-## scale so every pixel stays hard.
+## The aircraft at a whole-number scale, seated on its own baseline so the
+## wheels touch the concrete no matter what margin the canvas carries.
 func _draw_hero(plane: AircraftInstance) -> void:
     var sprite: Texture2D = LiverySprites.side_texture(plane)
     if sprite == null:
         return
     var drawn: Vector2 = sprite.get_size() * float(HERO_SCALE)
-    # Seat the aircraft on its own baseline rather than on the bottom of its
-    # canvas. Generated art leaves a variable margin under the wheels, so using
-    # the canvas height leaves the plane hovering above the apron.
     var baseline: float = float(_anchors.get("baseline", sprite.get_size().y - 1))
     var wheels_at: float = (baseline + 1.0) * float(HERO_SCALE)
-    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(GROUND_Y + 2.0 - wheels_at))
+    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(APRON_Y - wheels_at))
+    # Contact shadow first, so the aircraft sits on the concrete instead of
+    # hovering over it.
+    draw_rect(Rect2(Vector2(roundf(_hero_origin.x + drawn.x * 0.14), APRON_Y + 1.0),
+        Vector2(roundf(drawn.x * 0.68), 3.0)), _colour("shadow"))
     draw_texture_rect(sprite, Rect2(_hero_origin, drawn), false)
 
+# ---------------------------------------------------------------------------
+# The cabin strip
+# ---------------------------------------------------------------------------
+
+func _draw_cabin(plane: AircraftInstance) -> void:
+    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
     var loaded: Array[Job] = sim.state.loaded_jobs(plane.id)
     var used: Dictionary = Rules.load_used(loaded)
-    _draw_empty_slots(plane, int(used["seats"]), int(used["cargo_units"]))
-    var seat_index := 0
-    var cargo_index := 0
-    for job: Job in loaded:
-        for i in range(job.seats):
-            _draw_payload(true, seat_index, seat_index % 5, "")
-            seat_index += 1
-        for i in range(job.cargo_units):
-            _draw_payload(false, cargo_index, 0, job.presentation)
-            cargo_index += 1
-    # Empty seats are still seats: draw the furniture so 0/4 reads as four
-    # visibly empty places, not four dark rectangles.
-    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
-    var seat_anchors: Array = _anchors.get("seats", [])
-    var empty_seat: Texture2D = _texture(_seat_art())
-    if empty_seat != null:
-        for i in range(seat_index, mini(int(limits["seats"]), seat_anchors.size())):
-            var centre: Vector2 = _slot_screen_position(true, i)
-            var drawn_seat: Vector2 = empty_seat.get_size() * float(HERO_SCALE)
-            draw_texture_rect(empty_seat, Rect2((centre - drawn_seat * 0.5).round(), drawn_seat), false)
+    var seats_used: int = mini(int(used["seats"]), SEAT_POSITIONS)
+    var cargo_used: int = mini(int(used["cargo_units"]), HOLD_SLOTS.size())
+    var seat_limit: int = mini(int(limits["seats"]), SEAT_POSITIONS)
+    var cargo_limit: int = int(limits["cargo_units"])
 
-## Unfilled seats and hold slots are dashed outlines inside the aircraft, so
-## spare capacity is something you see in the plane, not just a number.
-func _draw_empty_slots(plane: AircraftInstance, seats_used: int, cargo_used: int) -> void:
-    var empty: Texture2D = _texture(_seat_art())
-    if empty == null:
+    _draw_fuselage_band()
+    _draw_hold(cargo_used, cargo_limit)
+    _draw_portholes(seat_limit)
+    _draw_dressing()
+    _draw_seat_row(seats_used, seat_limit)
+    _draw_capacity_line(seats_used, seat_limit, cargo_used, cargo_limit)
+
+## The cross-section shell: cream skin, interior wall, carpet, cut ends.
+func _draw_fuselage_band() -> void:
+    # Outer skin above and below the interior.
+    draw_rect(Rect2(Vector2(0.0, STRIP_TOP), Vector2(size.x, size.y - STRIP_TOP)),
+        _colour("panel_light"))
+    draw_rect(Rect2(Vector2(0.0, STRIP_TOP), Vector2(size.x, 1.0)), _colour("white"))
+    draw_rect(Rect2(Vector2(0.0, STRIP_TOP + 1.0), Vector2(size.x, 2.0)), _colour("card_hi"))
+    draw_rect(Rect2(Vector2(0.0, WALL_TOP - 1.0), Vector2(size.x, 1.0)), _colour("panel_shade"))
+    # Interior wall.
+    draw_rect(Rect2(Vector2(0.0, WALL_TOP), Vector2(size.x, FLOOR_TOP - WALL_TOP)),
+        _colour("card"))
+    draw_rect(Rect2(Vector2(0.0, WALL_TOP), Vector2(size.x, 1.0)), _colour("card_hi"))
+    # Carpet, tiled from the curated slice.
+    var carpet: Texture2D = _texture("cabin/floor_carpet.png")
+    if carpet != null:
+        var cw: float = carpet.get_size().x
+        var x := 0.0
+        while x < size.x:
+            draw_texture(carpet, Vector2(x, FLOOR_TOP).round())
+            x += cw
+    draw_rect(Rect2(Vector2(0.0, FLOOR_TOP), Vector2(size.x, 1.0)), _colour("panel_shade"))
+    # Belly skin under the carpet.
+    draw_rect(Rect2(Vector2(0.0, STRIP_BOTTOM), Vector2(size.x, size.y - STRIP_BOTTOM)),
+        _colour("panel_shade"))
+    draw_rect(Rect2(Vector2(0.0, STRIP_BOTTOM), Vector2(size.x, 1.0)), _colour("panel_edge"))
+
+## The tail hold: a darker bay with ribs, one real bag per loaded cargo unit,
+## netted down once the stack gets serious.
+func _draw_hold(cargo_used: int, _cargo_limit: int) -> void:
+    draw_rect(Rect2(Vector2(HOLD_X, WALL_TOP), Vector2(HOLD_W, FLOOR_TOP - WALL_TOP)),
+        _colour("panel_shade"))
+    draw_rect(Rect2(Vector2(HOLD_X, WALL_TOP), Vector2(HOLD_W, 2.0)), _colour("panel_deep"))
+    draw_rect(Rect2(Vector2(HOLD_X, WALL_TOP), Vector2(2.0, FLOOR_TOP - WALL_TOP)),
+        _colour("panel_deep"))
+    draw_rect(Rect2(Vector2(HOLD_X + HOLD_W - 2.0, WALL_TOP),
+        Vector2(2.0, FLOOR_TOP - WALL_TOP)), _colour("panel_deep"))
+    for rib in range(3):
+        var rx: float = HOLD_X + 34.0 + float(rib) * 36.0
+        draw_rect(Rect2(Vector2(rx, WALL_TOP + 2.0), Vector2(2.0, FLOOR_TOP - WALL_TOP - 2.0)),
+            _colour("panel"))
+    # The net hangs against the wall whether or not anything is under it yet;
+    # bags load in front of it so the manifest stays readable.
+    var net: Texture2D = _texture("cabin/cargo_net.png")
+    if net != null:
+        draw_texture(net, Vector2(26.0, 268.0))
+    for index in range(cargo_used):
+        var slot: Array = HOLD_SLOTS[index]
+        var texture: Texture2D = _texture(String(slot[0]))
+        if texture != null:
+            draw_texture(texture, (slot[1] as Vector2).round())
+
+## Portholes in the wall between the headrests: one per seat position, plus a
+## spare aft of the galley so the wall never dead-ends.
+func _draw_portholes(_seat_limit: int) -> void:
+    var porthole: Texture2D = _texture("cabin/porthole.png")
+    if porthole == null:
         return
-    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
-    var drawn: Vector2 = empty.get_size() * float(HERO_SCALE)
-    var seat_slots: int = mini(int(limits["seats"]), (_anchors.get("seats", []) as Array).size())
-    for index in range(seats_used, seat_slots):
-        var centre: Vector2 = _slot_screen_position(true, index)
-        draw_texture_rect(empty, Rect2((centre - drawn * 0.5).round(), drawn), false)
-    var cargo_slots: int = mini(int(limits["cargo_units"]),
-        (_anchors.get("cargo", []) as Array).size())
-    for index in range(cargo_used, cargo_slots):
-        var centre: Vector2 = _slot_screen_position(false, index)
-        draw_texture_rect(empty, Rect2((centre - drawn * 0.5).round(), drawn), false)
+    for index in range(SEAT_POSITIONS):
+        var at := Vector2(SEAT_ZONE_X + float(index) * SEAT_PITCH + 38.0, 224.0)
+        draw_texture(porthole, at.round())
 
-func _draw_payload(is_seat: bool, index: int, variant: int, presentation: String) -> void:
-    var texture: Texture2D = _payload_texture(is_seat, variant, presentation)
-    if texture == null:
+## Bulkhead door aft, galley trolley forward: the strip reads as one aircraft,
+## not a row of seats floating in cream.
+func _draw_dressing() -> void:
+    var door: Texture2D = _texture("cabin/door_exit.png")
+    if door != null:
+        # Between the hold and the cabin.
+        draw_texture(door, Vector2(HOLD_X + HOLD_W + 2.0, FLOOR_TOP - 96.0).round())
+    var cart: Texture2D = _texture("cabin/galley_cart.png")
+    if cart != null:
+        draw_texture(cart, Vector2(586.0, FLOOR_TOP - 98.0).round())
+
+## Seats up to capacity, greyed sockets beyond it, passengers in the occupied
+## ones. Passenger first, seat over it: the sprite peeks over the backrest and
+## rests a hand on the armrest, which reads as sitting IN the seat.
+func _draw_seat_row(seats_used: int, seat_limit: int) -> void:
+    var seat: Texture2D = _texture("cabin/seat_tan.png")
+    if seat == null:
         return
-    var centre: Vector2 = _slot_screen_position(is_seat, index)
-    if is_seat:
-        # The seat stays under its passenger: an occupied place reads as a
-        # person sitting in a seat, not a person floating in the cabin.
-        var seat: Texture2D = _texture(_seat_art())
-        if seat != null:
-            var seat_drawn: Vector2 = seat.get_size() * float(HERO_SCALE)
-            draw_texture_rect(seat, Rect2((centre - seat_drawn * 0.5).round(), seat_drawn), false)
-    var drawn: Vector2 = texture.get_size() * float(HERO_SCALE)
-    var at: Vector2 = (centre - drawn * 0.5).round()
-    if is_seat:
-        at += Vector2(1.0, -1.0)      # perched on the cushion, not sunk in it
-    draw_texture_rect(texture, Rect2(at, drawn), false)
+    var pending: Dictionary = {}
+    for item: Dictionary in _in_transit:
+        if bool(item["seat"]):
+            pending[int(item.get("index", -1))] = true
+    for index in range(SEAT_POSITIONS):
+        var at: Vector2 = _seat_position(index)
+        if index >= seat_limit:
+            # Not installed in this configuration: a grey socket, so spare
+            # airframe capacity is something you can see and buy into.
+            draw_texture_rect(seat, Rect2(at.round(), seat.get_size()), false,
+                Color(0.56, 0.58, 0.64))
+            continue
+        var boarded: bool = index < seats_used and not pending.has(index)
+        if boarded:
+            var passenger: Texture2D = _texture(
+                "people/cabin_passenger_%d.png" % (index % PASSENGER_VARIANTS))
+            if passenger != null:
+                draw_texture(passenger, (at + Vector2(12.0, 4.0)).round())
+        draw_texture(seat, at.round())
 
-## Tight generated cabins use the 8px seat; roomy ones the 11px.
-func _seat_art() -> String:
-    return "ui/seat_small.png" if int(_anchors.get("seat_slot", 10)) <= 8 else "ui/seat_empty.png"
-
-func _payload_texture(is_seat: bool, variant: int, presentation: String) -> Texture2D:
-    if is_seat:
-        return _texture("people/seated_%d.png" % (variant % 5))
-    var kind := "box"
-    if presentation.contains("mail"):
-        kind = "mail"
-    elif presentation.contains("medical"):
-        kind = "medical"
-    elif presentation.contains("livestock"):
-        kind = "livestock"
-    return _texture("cargo/cabin_%s.png" % kind)
+## One quiet line on the skin band saying the same thing the furniture shows.
+func _draw_capacity_line(seats_used: int, seat_limit: int,
+        cargo_used: int, cargo_limit: int) -> void:
+    var text: String = "%d/%d SEATS   %d/%d HOLD" % [
+        seats_used, seat_limit, cargo_used, cargo_limit]
+    var width: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x
+    _text(Vector2(size.x - width - 8.0, STRIP_TOP + 8.0), text, "panel_deep")
 
 func _draw_route_strip(plane: AircraftInstance) -> void:
     var leg: FlightLeg = sim.flight_for_aircraft(plane.id)
@@ -645,21 +705,8 @@ func _draw_route_strip(plane: AircraftInstance) -> void:
     draw_rect(Rect2(box.position, Vector2(box.size.x, 1.0)), _colour("panel_edge"))
     _text(Vector2(roundf((size.x - width) * 0.5), y), text, colour)
 
-## One plain line: how full is it. The aircraft above already shows this; the
-## line just confirms it in words.
-func _draw_fullness(plane: AircraftInstance) -> void:
-    var limits: Dictionary = Rules.capacity(_family(), plane.configuration)
-    var used: Dictionary = Rules.load_used(sim.state.loaded_jobs(plane.id))
-    var text: String = "%d/%d SEATS   %d/%d HOLD" % [
-        int(used["seats"]), int(limits["seats"]),
-        int(used["cargo_units"]), int(limits["cargo_units"])]
-    var width: float = _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x
-    var box := Rect2(Vector2(roundf((size.x - width) * 0.5) - 6.0, GROUND_Y + 5.0),
-        Vector2(width + 12.0, 13.0))
-    draw_rect(box, _colour("panel_deep"))
-    _text(Vector2(roundf((size.x - width) * 0.5), GROUND_Y + 14.0), text, "panel_light")
-
-## Payload in flight from the job list to its slot, on a shallow arc.
+## Payload in flight from the job list to its place in the cabin, on a shallow
+## arc. Passengers hop as the same sprite that will sit in the seat.
 func _draw_in_transit() -> void:
     for item: Dictionary in _in_transit:
         var t: float = clampf(float(item["t"]), 0.0, 1.0)
@@ -669,13 +716,18 @@ func _draw_in_transit() -> void:
         var from: Vector2 = item["from"]
         var to: Vector2 = item["to"]
         var at: Vector2 = from.lerp(to, eased)
-        at.y -= sin(eased * PI) * 26.0        # hop
-        var texture: Texture2D = _payload_texture(
-            bool(item["seat"]), int(item["variant"]), String(item["kind"]))
+        at.y -= sin(eased * PI) * 30.0        # hop
+        var texture: Texture2D = _transit_texture(item)
         if texture == null:
             continue
-        var drawn: Vector2 = texture.get_size() * float(HERO_SCALE)
-        draw_texture_rect(texture, Rect2((at - drawn * 0.5).round(), drawn), false)
+        draw_texture(texture, (at - texture.get_size() * 0.5).round())
+
+func _transit_texture(item: Dictionary) -> Texture2D:
+    if bool(item["seat"]):
+        return _texture("people/cabin_passenger_%d.png" % int(item["variant"]))
+    var index: int = int(item.get("index", item.get("variant", 0)))
+    var slot: Array = HOLD_SLOTS[clampi(index, 0, HOLD_SLOTS.size() - 1)]
+    return _texture(String(slot[0]))
 
 # ---------------------------------------------------------------------------
 # Visual card
