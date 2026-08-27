@@ -34,6 +34,8 @@ var _busy := false
 var _world_return_position := Vector2.ZERO
 var _world_return_stop := 2
 var _followed_aircraft_id := ""
+## Terrain strip drawn under the followed aircraft (below WorldOverlay).
+var _follow_terrain: FollowTerrain
 ## The flight the player is currently watching, which drives the automatic
 ## handoff between the airfield and the world map.
 var _watched_flight_id := ""
@@ -72,6 +74,11 @@ func _ready() -> void:
     _overlay.bind(db, _camera, sim)
     _hud.bind(db)
 
+    _follow_terrain = FollowTerrain.new()
+    $UI.add_child(_follow_terrain)
+    $UI.move_child(_follow_terrain, 0)  # below WorldOverlay
+    _follow_terrain.bind(sim, _overlay)
+
     _overlay.airport_clicked.connect(_on_airport_clicked)
     _overlay.airport_activated.connect(_on_airport_activated)
     _overlay.background_clicked.connect(_on_background_clicked)
@@ -92,6 +99,8 @@ func _process(_delta: float) -> void:
     # Timestamps do the work; this only notices when a boundary has been passed.
     sim.tick()
     _follow_aircraft()
+    _follow_terrain.set_followed(
+        _followed_aircraft_id if _view == View.WORLD else "")
     _handoff_watched_flight()
 
 ## Moves the camera between the airfield and the world as the watched flight

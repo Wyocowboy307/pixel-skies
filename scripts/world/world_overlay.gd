@@ -57,6 +57,14 @@ var selected_aircraft_id := ""
 ## Aircraft screen positions computed this frame, reused for picking.
 var _aircraft_screen: Dictionary = {}
 
+## While the follow-mode terrain strip is on screen (set by FollowTerrain),
+## the map furniture — markers, labels, routes, cloud field — is suppressed:
+## it would float over fictional terrain. The followed aircraft is drawn
+## centred instead, with its luggage-tag chip and a minimal ETA strip.
+var terrain_follow_id := ""
+## Drives the two-position propeller flicker of the followed aircraft.
+var _prop_phase := 0.0
+
 var selected_airport_id := ""
 var hovered_airport_id := ""
 var routes: Array[Array] = []
@@ -133,8 +141,15 @@ func _rebuild_routes() -> void:
         ["apt_bil", "apt_den"],
     ]
 
+func set_terrain_follow(aircraft_id: String) -> void:
+    if terrain_follow_id == aircraft_id:
+        return
+    terrain_follow_id = aircraft_id
+    queue_redraw()
+
 func _process(delta: float) -> void:
     _pulse = fposmod(_pulse + delta, TAU)
+    _prop_phase = fposmod(_prop_phase + delta * 26.0, TAU)
     _cloud_drift = fposmod(
         _cloud_drift + delta * CLOUD_DRIFT_PER_MINUTE / 60.0, WorldProjection.WORLD_SIZE.x)
     if sim != null and not sim.state.active_flights().is_empty():
@@ -213,7 +228,11 @@ func _unhandled_input(event: InputEvent) -> void:
             aircraft_clicked.emit(aircraft_hit)
         return
 
-    var hit: String = _airport_at(button.position)
+    # Over the terrain strip there are no airports to pick — the map beneath
+    # is hidden — so any non-aircraft click reads as background and releases
+    # the follow.
+    var hit: String = "" if not terrain_follow_id.is_empty() \
+        else _airport_at(button.position)
     if hit.is_empty():
         selected_aircraft_id = ""
         selected_airport_id = ""
@@ -241,6 +260,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _draw() -> void:
     if db == null or camera == null:
         return
+    if not terrain_follow_id.is_empty():
+        _draw_terrain_followed()
+        return
     _draw_routes()
     # Clouds sit above the terrain and its route trails but below every marker,
     # label and aircraft: weather never hides information.
@@ -252,6 +274,86 @@ func _draw() -> void:
     for entry: Dictionary in _label_order(visible):
         _draw_label(entry)
     _draw_flights()
+
+# ---------------------------------------------------------------------------
+# Follow-mode terrain strip
+# ---------------------------------------------------------------------------
+
+## Scale for the banked map frames over the terrain strip; the level aircraft
+## uses its 48px ground sprite at native scale, matching the strip's own pixel
+## density.
+const FOLLOW_BANK_SCALE := 3
+
+## The followed aircraft, centred over the FollowTerrain strip below this
+## layer: banked livery frames, a spinning prop, a one-pixel bob, its
+## luggage-tag chip and a minimal ETA strip. Everything is read from the leg's
+## timestamps — presentation only.
+func _draw_terrain_followed() -> void:
+    _aircraft_screen.clear()
+    if sim == null:
+        return
+    var leg: FlightLeg = sim.flight_for_aircraft(terrain_follow_id)
+    var plane: AircraftInstance = sim.state.aircraft.get(terrain_follow_id, null)
+    if leg == null or plane == null:
+        return
+    var now: float = sim.now()
+    var place: Dictionary = sim.flights.position_of(leg, now)
+    var heading: float = AircraftSprites.bearing_to_screen(float(place["bearing"]))
+    # A gentle one-pixel bob on wall time; whole pixels only.
+    var bob: float = roundf(sin(_pulse * 2.0))
+    var at: Vector2 = _snap(size * 0.5) + Vector2(0.0, bob)
+    _aircraft_screen[terrain_follow_id] = at
+
+    # Level flight wears the detailed 48px top sprite at the terrain's own
+    # pixel density; a genuine turn flicks to the banked map frames — a wing
+    # dip — then settles back.
+    var bank: int = _bank_of(leg.id, heading)
+    var frame_px := 0.0
+    if bank != 0:
+        var banked: Texture2D = LiverySprites.map_strip(plane, bank)
+        AircraftSprites.draw_frame(self, banked, at, heading, FOLLOW_BANK_SCALE)
+        if banked != null:
+            frame_px = banked.get_size().y * float(FOLLOW_BANK_SCALE)
+    else:
+        var ground: Texture2D = LiverySprites.ground_strip(plane)
+        AircraftSprites.draw_frame(self, ground, at, heading, 1)
+        if ground != null:
+            frame_px = ground.get_size().y
+    _draw_follow_prop(frame_px, at, heading)
+    if leg.aircraft_id == selected_aircraft_id:
+        _callsign_chip(_font, plane, leg, at, now, 3)
+    _eta_chip(leg, now)
+
+## The same bright two-tip prop flick airport_view gives taxiing aircraft,
+## sized to the drawn frame.
+func _draw_follow_prop(frame_px: float, at: Vector2, heading: float) -> void:
+    if frame_px <= 0.0:
+        return
+    var half: float = frame_px * 0.5
+    var forward := Vector2(cos(heading), sin(heading))
+    var side := Vector2(-forward.y, forward.x)
+    var nose: Vector2 = at + forward * (half * 0.72)
+    var swing: float = sin(_prop_phase) * half * 0.42
+    var colour: Color = _colour("metal_light")
+    draw_rect(Rect2((nose + side * swing).round(), Vector2.ONE * 2.0), colour)
+    draw_rect(Rect2((nose - side * swing).round(), Vector2.ONE * 2.0), colour)
+    draw_rect(Rect2((nose - Vector2.ONE).round(), Vector2.ONE * 2.0), _colour("white"))
+
+## Destination and time remaining in one small dark chip at the bottom of the
+## screen — the only UI the strip itself asks for.
+func _eta_chip(leg: FlightLeg, now: float) -> void:
+    var destination: Dictionary = db.airports.get(leg.destination_id, {})
+    var text: String = "→ %s · %s" % [String(destination.get("code", "")),
+        UiTheme.duration(leg.seconds_remaining(now))]
+    var width: float = _font.get_string_size(
+        text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+    var box := Vector2(width + 12.0, 13.0)
+    var origin: Vector2 = _snap(Vector2((size.x - box.x) * 0.5, size.y - box.y - 6.0))
+    draw_rect(Rect2(origin - Vector2.ONE, box + Vector2(2.0, 2.0)), _colour("outline"))
+    draw_rect(Rect2(origin, box), _colour("navy_deep"))
+    draw_rect(Rect2(origin, Vector2(box.x, 1.0)), _colour("navy"))
+    draw_string(_font, origin + Vector2(6.0, 10.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("white"))
 
 # ---------------------------------------------------------------------------
 # Clouds
