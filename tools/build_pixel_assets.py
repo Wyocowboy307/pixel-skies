@@ -81,6 +81,9 @@ def build_people_and_cargo() -> int:
     people = ART / "people"
     for index, shirt in enumerate(scenery.PASSENGER_SHIRTS):
         scenery.seated_passenger(shirt).save(people / f"seated_{index}.png", f"seated_{index}")
+    for index in range(len(scenery.CABIN_PASSENGERS)):
+        scenery.cabin_passenger(index).save(
+            people / f"cabin_passenger_{index}.png", f"cabin_passenger_{index}")
     for kind in ("box", "mail", "medical", "livestock"):
         scenery.cabin_crate(kind).save(ART / "cargo" / f"cabin_{kind}.png", kind)
     shirts = {
@@ -101,7 +104,8 @@ def build_people_and_cargo() -> int:
     scenery.seat_small().save(ART / "ui" / "seat_small.png", "seat_small")
     for name, width, height, seed in scenery.CLOUDS:
         scenery.cloud(width, height, seed).save(ART / "world" / f"{name}.png", name)
-    return len(shirts) + 4 + len(scenery.PASSENGER_SHIRTS) + 4 \
+    return len(shirts) + 4 + len(scenery.PASSENGER_SHIRTS) \
+        + len(scenery.CABIN_PASSENGERS) + 4 \
         + len(scenery.PORTRAITS) + 1 + len(scenery.CLOUDS)
 
 
