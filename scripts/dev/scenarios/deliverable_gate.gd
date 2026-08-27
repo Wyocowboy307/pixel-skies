@@ -32,16 +32,18 @@ func run(cap) -> void:
     # 3/4. Job loading animation + loaded plane.
     main._detail_view._set_mode("load")
     await cap.wait(0.5)
-    var first := true
+    var boarded := 0
     for job: Job in sim.state.jobs_at("apt_bzn"):
-        if job.destination_id != "apt_bil" and job.seats == 0:
-            continue
         if sim.load_job(plane.id, job.id)["ok"]:
-            if first and main._detail_view._job_list.get_child_count() > 0:
-                main._detail_view._on_load_job_visual(job) if main._detail_view.has_method("_on_load_job_visual") else null
-            first = false
+            boarded += 1
     main._detail_view.refresh()
-    await cap.wait(0.2)
+    # Stage one traveller mid-hop for the boarding-animation frame.
+    main._detail_view._in_transit.append({
+        "t": 0.45, "from": Vector2(120.0, 140.0),
+        "to": main._detail_view._slot_screen_position(true, mini(1, boarded)),
+        "seat": true, "variant": 1, "kind": "",
+    })
+    await cap.wait(0.12)
     await cap.shot("job_loading")
     await cap.wait(0.8)
     main._detail_view._set_mode("")
