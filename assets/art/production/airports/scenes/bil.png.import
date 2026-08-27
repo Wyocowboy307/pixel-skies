@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://qvwrf0fjxx1j"
-path="res://.godot/imported/bzn.png-c0da704679317ee953162388209feab8.ctex"
+uid="uid://du11wbem0ktrs"
+path="res://.godot/imported/bil.png-cff004a0fa67f51973fadf7007ddaefe.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/production/airports/scenes/bzn.png"
-dest_files=["res://.godot/imported/bzn.png-c0da704679317ee953162388209feab8.ctex"]
+source_file="res://assets/art/production/airports/scenes/bil.png"
+dest_files=["res://.godot/imported/bil.png-cff004a0fa67f51973fadf7007ddaefe.ctex"]
 
 [params]
 
