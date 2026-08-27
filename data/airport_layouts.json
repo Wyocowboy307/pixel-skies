@@ -7,92 +7,30 @@
       "airport_id": "apt_bzn",
       "biome": "mountain",
       "ground_extent": [
-        768,
-        432
+        1600,
+        900
       ],
       "runway": {
         "start": [
-          -288,
-          128
+          -580,
+          258
         ],
         "end": [
-          288,
-          128
+          164,
+          258
         ],
-        "width": 32,
+        "width": 96,
         "designations": [
-          "12",
-          "30"
-        ]
-      },
-      "taxiways": [
-        {
-          "id": "twy_a",
-          "points": [
-            [
-              -208,
-              128
-            ],
-            [
-              -208,
-              48
-            ],
-            [
-              -96,
-              48
-            ]
-          ],
-          "width": 16
-        },
-        {
-          "id": "twy_b",
-          "points": [
-            [
-              208,
-              128
-            ],
-            [
-              208,
-              48
-            ],
-            [
-              96,
-              48
-            ]
-          ],
-          "width": 16
-        },
-        {
-          "id": "twy_apron",
-          "points": [
-            [
-              -96,
-              48
-            ],
-            [
-              96,
-              48
-            ]
-          ],
-          "width": 16
-        }
-      ],
-      "apron": {
-        "centre": [
-          0,
-          0
-        ],
-        "size": [
-          272,
-          80
+          "36L",
+          "18R"
         ]
       },
       "stands": [
         {
           "id": "stand_1",
           "position": [
-            -64,
-            -8
+            -100,
+            -150
           ],
           "heading": -90,
           "size": "small"
@@ -100,43 +38,11 @@
         {
           "id": "stand_2",
           "position": [
-            64,
-            -8
+            220,
+            -150
           ],
           "heading": -90,
           "size": "small"
-        }
-      ],
-      "buildings": [
-        {
-          "id": "terminal",
-          "type": "terminal",
-          "sprite": "terminal_1",
-          "position": [
-            0,
-            -80
-          ],
-          "level": 1
-        },
-        {
-          "id": "tower",
-          "type": "tower",
-          "sprite": "tower",
-          "position": [
-            96,
-            -88
-          ],
-          "level": 1
-        },
-        {
-          "id": "fuel",
-          "type": "fuel",
-          "sprite": "fuel_depot",
-          "position": [
-            -136,
-            -72
-          ],
-          "level": 1
         }
       ],
       "upgrade_slots": [
@@ -168,256 +74,155 @@
           ]
         }
       ],
-      "decor": [
-        {
-          "type": "trees",
-          "position": [
-            -224,
-            -168
-          ],
-          "size": [
-            280,
-            72
-          ]
-        },
-        {
-          "type": "ridge",
-          "position": [
-            140,
-            -176
-          ],
-          "size": [
-            340,
-            80
-          ]
-        },
-        {
-          "type": "trees",
-          "position": [
-            -176,
-            200
-          ],
-          "size": [
-            220,
-            56
-          ]
-        },
-        {
-          "type": "trees",
-          "position": [
-            216,
-            204
-          ],
-          "size": [
-            240,
-            52
-          ]
-        }
-      ],
-      "service_points": [
-        {
-          "id": "svc_1",
-          "position": [
-            -136,
-            -40
-          ],
-          "vehicle": "fuel_truck"
-        },
-        {
-          "id": "svc_2",
-          "position": [
-            128,
-            24
-          ],
-          "vehicle": "tug"
-        }
-      ],
-      "props": [
-        {
-          "sprite": "windsock",
-          "position": [
-            -248,
-            88
-          ]
-        },
-        {
-          "sprite": "runway_sign",
-          "position": [
-            -208,
-            96
-          ]
-        },
-        {
-          "sprite": "runway_sign",
-          "position": [
-            208,
-            96
-          ]
-        },
-        {
-          "sprite": "apron_light",
-          "position": [
-            -152,
-            -36
-          ]
-        },
-        {
-          "sprite": "apron_light",
-          "position": [
-            152,
-            -36
-          ]
-        }
-      ],
-      "fence": {
-        "y": -136,
-        "x0": -352,
-        "x1": 352
-      },
       "ground": {
         "threshold": [
-          -256,
-          128
+          -510,
+          258
         ],
         "rotate_at": [
-          96,
-          128
+          -76,
+          258
         ],
         "runway_end": [
-          288,
-          128
+          144,
+          258
         ],
         "touchdown": [
-          -200,
-          128
+          -390,
+          258
         ],
         "exit_at": [
-          176,
-          128
+          208,
+          258
         ],
         "stands": {
           "stand_1": {
             "pushback": [
               [
-                -64,
-                -8
+                -100,
+                -150
               ],
               [
-                -64,
-                24
+                -100,
+                -50
               ]
             ],
             "taxi_out": [
               [
-                -64,
-                24
+                -100,
+                -50
               ],
               [
-                -96,
-                48
+                -232,
+                20
               ],
               [
-                -208,
-                48
+                -232,
+                150
               ],
               [
-                -208,
-                108
+                -370,
+                258
               ],
               [
-                -256,
-                128
+                -510,
+                258
               ]
             ],
             "taxi_in": [
               [
-                176,
-                128
+                208,
+                258
               ],
               [
                 208,
-                116
+                110
               ],
               [
                 208,
-                48
+                20
               ],
               [
-                -40,
-                48
+                -70,
+                -20
               ],
               [
-                -64,
-                24
+                -100,
+                -70
               ],
               [
-                -64,
-                -8
+                -100,
+                -150
               ]
             ]
           },
           "stand_2": {
             "pushback": [
               [
-                64,
-                -8
+                220,
+                -150
               ],
               [
-                64,
-                24
+                220,
+                -50
               ]
             ],
             "taxi_out": [
               [
-                64,
-                24
+                220,
+                -50
               ],
               [
-                -96,
-                48
+                208,
+                20
               ],
               [
-                -208,
-                48
+                -232,
+                150
               ],
               [
-                -208,
-                108
+                -370,
+                258
               ],
               [
-                -256,
-                128
+                -510,
+                258
               ]
             ],
             "taxi_in": [
               [
-                176,
-                128
+                208,
+                258
               ],
               [
                 208,
-                116
+                70
               ],
               [
-                208,
-                48
+                220,
+                -10
               ],
               [
-                96,
-                48
+                220,
+                -70
               ],
               [
-                64,
-                24
-              ],
-              [
-                64,
-                -8
+                220,
+                -150
               ]
             ]
           }
         }
-      }
+      },
+      "scene": "airports/scenes/bzn.png",
+      "camera_focus": [
+        -20,
+        -160
+      ],
+      "terminal_door": [
+        -30,
+        -320
+      ]
     },
     {
       "id": "layout_bil",

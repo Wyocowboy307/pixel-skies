@@ -82,9 +82,13 @@ func test_arrival_ends_at_the_stand() -> void:
     var state: Dictionary = FlightGround.state(leg, "apt_bil", layout, stand,
         leg.arrival_unix - 1.0)
     check(bool(state["visible"]), "the arriving aircraft is visible while unloading")
-    var expected: Vector2 = Vector2(-64, -8)
+    var expected := Vector2.ZERO
+    for entry: Variant in layout.get("stands", []):
+        if String((entry as Dictionary).get("id", "")) == stand:
+            var raw: Array = (entry as Dictionary).get("position", [0, 0])
+            expected = Vector2(float(raw[0]), float(raw[1]))
     check(state["position"].distance_to(expected) < 4.0,
-        "unloads on its stand, got %s" % state["position"])
+        "unloads on its stand, got %s (stand at %s)" % [state["position"], expected])
 
 func test_presentation_does_not_touch_the_flight() -> void:
     # The regression rule: camera and animation work must never change results.

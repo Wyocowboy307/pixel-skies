@@ -25,6 +25,10 @@ var sim: Simulation
 var selected_aircraft_id := ""
 
 var _biome := "mountain"
+## The composed scene texture, when this airport has one. Scene airports draw
+## one authored image as the entire ground truth; procedural drawing remains
+## only as the fallback for airports not yet composed.
+var _scene: Texture2D
 var _tiles: Dictionary = {}
 var _sprites: Dictionary = {}
 var _scatter: Array[Dictionary] = []
@@ -49,6 +53,8 @@ func setup(airport_data: Dictionary, layout_data: Dictionary) -> void:
     layout = layout_data
     airport_id = String(airport_data.get("id", ""))
     _biome = String(layout.get("biome", "plains"))
+    var scene_path: String = String(layout.get("scene", ""))
+    _scene = AssetPaths.load_texture(scene_path) if not scene_path.is_empty() else null
     _build_scatter()
     _dusting.clear()
     queue_redraw()
@@ -161,6 +167,9 @@ func bounds() -> Rect2:
     return Rect2(-extent, extent * 2.0)
 
 func apron_centre() -> Vector2:
+    # Scene airports author their own framing point.
+    if layout.has("camera_focus"):
+        return _vec(layout["camera_focus"])
     var apron: Dictionary = layout.get("apron", {})
     if apron.is_empty():
         return Vector2.ZERO
@@ -237,6 +246,17 @@ func _build_scatter() -> void:
 
 func _draw() -> void:
     if layout.is_empty():
+        return
+    if _scene != null:
+        # The composed scene is the airfield: one texture, no procedural
+        # geometry. Only living things draw on top of it.
+        var extent: Vector2 = _extent()
+        _tiled(_grass_tile(), Rect2(-extent - Vector2(256, 256), extent * 2.0 + Vector2(512, 512)))
+        draw_texture(_scene, -extent)
+        _draw_parked_aircraft()
+        _draw_movements()
+        _draw_apron_life()
+        _draw_weather()
         return
     _draw_ground()
     _draw_decor()
@@ -605,6 +625,8 @@ func _draw_apron_life() -> void:
 ## the plane when boarding, back to the terminal when it has arrived.
 func _draw_boarding_walkers() -> void:
     var terminal: Vector2 = _building_position("terminal")
+    if layout.has("terminal_door"):
+        terminal = _vec(layout["terminal_door"])
     if terminal == Vector2.INF:
         return
     for state: Dictionary in _local_movements():
@@ -634,6 +656,9 @@ func _draw_boarding_walkers() -> void:
 ## One baggage cart patrols the near edge of the apron, endlessly.
 func _draw_baggage_cart() -> void:
     var apron: Dictionary = layout.get("apron", {})
+    if apron.is_empty() and layout.has("terminal_door"):
+        var door: Vector2 = _vec(layout["terminal_door"])
+        apron = {"centre": [door.x, door.y + 330.0], "size": [480, 60]}
     if apron.is_empty():
         return
     var texture: Texture2D = _sprite(VEHICLES % "baggage_cart")
