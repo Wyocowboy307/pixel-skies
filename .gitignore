@@ -9,3 +9,4 @@ art_generation_ledger.local.json
 
 tools/.venv/
 .claude/
+assets/library/
