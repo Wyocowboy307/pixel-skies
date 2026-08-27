@@ -16,6 +16,24 @@ shapes and no painterly shading anywhere in the core presentation.
 - Every texture imports lossless, nearest filter, no mipmaps.
 - Nothing is drawn at a fractional pixel position. Sprites snap to the pixel grid.
 
+## 1b. The curated library
+
+`assets/library/` (gitignored, 144MB) holds the curated pack reduction described
+in `docs/LIBRARY_README.md` / `docs/LIBRARY_HANDOFF.md`. Production scene art is
+**sliced from these sheets** via `tools/curate.py` manifests and composed via
+`tools/compose_airport.py` — never hand-copied, never procedurally faked.
+
+Two consequences:
+
+- **Library art keeps its own palette.** It is approved finished art; snapping
+  it to the game palette would destroy it. The locked-palette rule below binds
+  the *generated placeholder* tree (`assets/art/placeholder/`), which tests
+  enforce; the two palettes are harmonized by curation choices, not by force.
+- **Scene airports.** An airport whose layout carries a `scene` key draws one
+  composed texture as its entire ground truth; only living things (aircraft,
+  walkers, vehicles, weather) draw on top. Procedural airfield drawing survives
+  solely as the fallback for airports not yet composed.
+
 ## 2. Locked palette
 
 Every asset draws from this palette and no other colour. It is defined once in
