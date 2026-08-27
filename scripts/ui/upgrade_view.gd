@@ -1,22 +1,28 @@
 class_name UpgradeView
 extends Control
-## The plane upgrade shop: one owned airframe on the apron and the handful of
-## kits that can be bolted onto it.
+## The plane upgrade shop: one owned airframe big on the apron, and the
+## handful of kits that can be bolted onto it as compact chunky buttons.
 ##
-## The plane is the centrepiece; each card states plainly what it costs and
-## what it changes, and hovering a card answers the only question that matters
-## before spending: "what do my numbers become?" Buying is celebrated — an
-## upgrade is a milestone for a small airline, not a settings toggle.
+## Wanting the upgrade is visual: hovering a kit previews it on the stat strip
+## AND on the plane itself — ghost seats appear by the fuselage, a range line
+## grows past the nose, a ghost crate floats at the hold. Buying is celebrated:
+## the plane flashes and hops, confetti flies, and the new stat counts up.
 
 signal closed()
 
 const HERO_SCALE := 2
-const GROUND_Y := 186.0
-const STRIP_Y := 192.0
-const CARDS_Y := 216.0
-const CARD_SIZE := Vector2(196.0, 136.0)
+const GROUND_Y := 222.0
+const APRON_H := 16.0
+const STRIP_Y := 228.0
+const BTNS_Y := 258.0
+const BTN_SIZE := Vector2(168.0, 46.0)
+const INFO_Y := 312.0
 const FLOAT_SECONDS := 0.62
 const CONFETTI_SECONDS := 0.85
+const COUNT_SECONDS := 0.7
+## Whole-pixel hop the plane does when a kit is bolted on.
+const BOUNCE: Array[int] = [-1, -2, -3, -3, -2, -1, 0, -1, -1, 0, 0, 0]
+const STAT_FORMATS := {"SEATS": "%d SEATS", "HOLD": "%d HOLD", "NM": "%d NM"}
 
 var sim: Simulation
 var aircraft_id := ""
@@ -29,10 +35,14 @@ var _family_label: Label
 var _money_label: Label
 var _strip_row: HBoxContainer
 var _cards_row: HBoxContainer
+var _info_label: Label
 var _card_panels: Dictionary = {}      ## upgrade_id -> PanelContainer
+var _cart_tex: Texture2D
+var _cone_tex: Texture2D
 
 var _hovered_id := ""
 var _selected_id := ""
+var _preview_started := 0.0
 var _hero_origin := Vector2.ZERO
 var _hero_size := Vector2.ZERO
 ## Opaque bounds of the side sprite within its canvas, so effects can wrap the
@@ -42,10 +52,14 @@ var _hero_bbox := Rect2()
 ## Celebration state — purely presentation, started after the sim has already
 ## committed the purchase.
 var _flash_frames := 0
+var _bounce_frames := 0
 var _float_label: Label
 var _float_y := 0.0
 var _float_t := 0.0
 var _confetti: Array[Dictionary] = []
+var _stat_labels: Dictionary = {}      ## unit -> Label on the default strip
+var _countup: Array[Dictionary] = []   ## {unit, from, to} counting up post-buy
+var _count_t := -1.0
 
 func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_STOP
@@ -56,6 +70,8 @@ func _ready() -> void:
     get_viewport().size_changed.connect(func() -> void: size = get_viewport_rect().size)
     texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
     _font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
+    _cart_tex = AssetPaths.load_texture("shop/tool_cart.png")
+    _cone_tex = AssetPaths.load_texture("shop/cone.png")
     _build_chrome()
     set_process(true)
 
@@ -145,14 +161,22 @@ func _build_chrome() -> void:
     _strip_row.add_theme_constant_override("separation", 8)
     add_child(_strip_row)
 
+    # The kit buttons: compact and chunky, not tall commerce cards.
     _cards_row = HBoxContainer.new()
     _cards_row.set_anchors_preset(Control.PRESET_TOP_WIDE)
     _cards_row.offset_left = 6.0
     _cards_row.offset_right = -6.0
-    _cards_row.offset_top = CARDS_Y
+    _cards_row.offset_top = BTNS_Y
     _cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
-    _cards_row.add_theme_constant_override("separation", 10)
+    _cards_row.add_theme_constant_override("separation", 12)
     add_child(_cards_row)
+
+    # One shared line under the buttons: the blurb, or why BUY is off.
+    _info_label = _label("", "white")
+    _info_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+    _info_label.offset_top = INFO_Y
+    _info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    add_child(_info_label)
 
 # ---------------------------------------------------------------------------
 # Refresh
@@ -190,6 +214,19 @@ func _refresh_cards() -> void:
         _cards_row.add_child(card)
         _card_panels[String(upgrade.get("id", ""))] = card
 
+## The icon that says what a kit touches: seats, hold, or range.
+func _kit_icon(upgrade: Dictionary) -> String:
+    var effects: Dictionary = upgrade.get("effects", {})
+    if int(effects.get("seats", 0)) != 0:
+        return "passenger"
+    if int(effects.get("cargo_units", 0)) != 0:
+        return "cargo"
+    if int(effects.get("range_nm", 0)) != 0:
+        return "range"
+    return "upgrade"
+
+## A compact chunky buy button: icon + name + price. The whole thing is the
+## button — hovering previews the kit on the plane, clicking buys it.
 func _build_card(upgrade: Dictionary) -> PanelContainer:
     var plane: AircraftInstance = _plane()
     var upgrade_id: String = String(upgrade.get("id", ""))
@@ -197,69 +234,75 @@ func _build_card(upgrade: Dictionary) -> PanelContainer:
     var verdict: Dictionary = sim.aircraft_upgrade_check(aircraft_id, upgrade_id)
 
     var panel := PanelContainer.new()
-    panel.custom_minimum_size = CARD_SIZE
+    panel.custom_minimum_size = BTN_SIZE
     panel.mouse_entered.connect(func() -> void: _set_hovered(upgrade_id))
     panel.mouse_exited.connect(func() -> void: _set_hovered(""))
     panel.gui_input.connect(func(event: InputEvent) -> void:
         if event is InputEventMouseButton and event.pressed \
                 and event.button_index == MOUSE_BUTTON_LEFT:
-            select_upgrade(upgrade_id))
-
-    var column := VBoxContainer.new()
-    column.add_theme_constant_override("separation", 4)
-    panel.add_child(column)
-
-    column.add_child(_label(String(upgrade.get("name", "")).to_upper(), "ink", 14))
-    var blurb := _label(String(upgrade.get("blurb", "")), "ink_soft")
-    blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    blurb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    column.add_child(blurb)
-
-    var spacer := Control.new()
-    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.add_child(spacer)
-
-    if owned:
-        var done := HBoxContainer.new()
-        done.alignment = BoxContainer.ALIGNMENT_CENTER
-        done.add_theme_constant_override("separation", 6)
-        column.add_child(done)
-        done.add_child(_icon("upgrade", 2))
-        done.add_child(_label("OWNED", "accent_green", 14))
-        return panel
+            if not owned and bool(verdict["ok"]):
+                _on_buy(upgrade_id)
+            else:
+                select_upgrade(upgrade_id))
 
     var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 5)
-    column.add_child(row)
-    row.add_child(_icon("money", 2))
-    row.add_child(_label(UiTheme.money(int(upgrade.get("cost", 0))), "ink", 14))
-    var push := Control.new()
-    push.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    push.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    row.add_child(push)
-    var buy := UiTheme.action("BUY")
-    buy.disabled = not bool(verdict["ok"])
-    buy.mouse_entered.connect(func() -> void: _set_hovered(upgrade_id))
-    buy.pressed.connect(func() -> void: _on_buy(upgrade_id))
-    row.add_child(buy)
+    row.add_theme_constant_override("separation", 6)
+    panel.add_child(row)
+    var badge := _icon(_kit_icon(upgrade), 2)
+    badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_child(badge)
 
-    if not bool(verdict["ok"]):
-        column.add_child(_label(String(verdict["reason"]), "accent_red"))
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 1)
+    column.alignment = BoxContainer.ALIGNMENT_CENTER
+    column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    row.add_child(column)
+    column.add_child(_label(String(upgrade.get("name", "")).to_upper(), "ink", 14))
+
+    var price_row := HBoxContainer.new()
+    price_row.add_theme_constant_override("separation", 4)
+    price_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    column.add_child(price_row)
+    if owned:
+        var tick := _icon("upgrade")
+        tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        price_row.add_child(tick)
+        price_row.add_child(_label("OWNED", "accent_green"))
+    else:
+        var coin := _icon("money")
+        coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        price_row.add_child(coin)
+        price_row.add_child(_label(UiTheme.money(int(upgrade.get("cost", 0))),
+            "ink" if bool(verdict["ok"]) else "accent_red"))
     return panel
 
 func _set_hovered(upgrade_id: String) -> void:
     if _hovered_id == upgrade_id:
         return
     _hovered_id = upgrade_id
+    _preview_started = _clock
     _refresh_strip()
     queue_redraw()
 
 ## Programmatic selection — also the hook the capture scenario drives.
 func select_upgrade(upgrade_id: String) -> void:
     _selected_id = "" if _selected_id == upgrade_id else upgrade_id
+    _preview_started = _clock
     _refresh_strip()
     queue_redraw()
+
+func _focus_id() -> String:
+    return _hovered_id if not _hovered_id.is_empty() else _selected_id
+
+## The kit being considered right now (hover beats selection), or {} when the
+## focus is empty or already fitted — that is what the ghosts preview.
+func _focused_kit() -> Dictionary:
+    var plane: AircraftInstance = _plane()
+    var focus: String = _focus_id()
+    if plane == null or focus.is_empty() or plane.upgrade_ids.has(focus):
+        return {}
+    return sim.aircraft_upgrade(plane.family_id, focus)
 
 # ---------------------------------------------------------------------------
 # CURRENT -> UPGRADED strip
@@ -288,32 +331,52 @@ func _stat_changes(candidate_id: String) -> Array[Dictionary]:
         out.append({"unit": "NM", "from": now_range, "to": next_range})
     return out
 
+## The plane's stats as they stand, with labels kept so a fresh purchase can
+## count the changed number up in place.
+func _build_default_strip() -> void:
+    var plane: AircraftInstance = _plane()
+    var family: Dictionary = sim.family_of(plane)
+    var limits: Dictionary = Rules.capacity(family, plane.configuration)
+    var values: Dictionary = {
+        "SEATS": int(limits["seats"]),
+        "HOLD": int(limits["cargo_units"]),
+        "NM": roundi(float(family.get("range_nm", 0.0))),
+    }
+    # Mid count-up the changed stat starts from its old value.
+    if _count_t >= 0.0:
+        for change: Dictionary in _countup:
+            values[String(change["unit"])] = int(change["from"])
+    _stat_labels = {}
+    var icons: Dictionary = {"SEATS": "passenger", "HOLD": "cargo", "NM": "range"}
+    var first := true
+    for unit: String in ["SEATS", "HOLD", "NM"]:
+        if not first:
+            _strip_row.add_child(_label("·", "sky_light", 14))
+        first = false
+        _strip_row.add_child(_icon(String(icons[unit])))
+        var stat := _label(String(STAT_FORMATS[unit]) % int(values[unit]), "white", 14)
+        _strip_row.add_child(stat)
+        _stat_labels[unit] = stat
+
 func _refresh_strip() -> void:
     for child: Node in _strip_row.get_children():
         child.queue_free()
+    _stat_labels = {}
     var plane: AircraftInstance = _plane()
     if plane == null:
         return
-    var focus: String = _hovered_id if not _hovered_id.is_empty() else _selected_id
-    if focus.is_empty():
-        # Nothing picked: state the plane as it is today.
-        var family: Dictionary = sim.family_of(plane)
-        var limits: Dictionary = Rules.capacity(family, plane.configuration)
-        _strip_row.add_child(_icon("passenger"))
-        _strip_row.add_child(_label("%d SEATS" % int(limits["seats"]), "white", 14))
-        _strip_row.add_child(_label("·", "sky_light", 14))
-        _strip_row.add_child(_icon("cargo"))
-        _strip_row.add_child(_label("%d HOLD" % int(limits["cargo_units"]), "white", 14))
-        _strip_row.add_child(_label("·", "sky_light", 14))
-        _strip_row.add_child(_icon("range"))
-        _strip_row.add_child(_label("%d NM" % roundi(float(family.get("range_nm", 0.0))),
-            "white", 14))
+    var focus: String = _focus_id()
+    # A fresh purchase owns the strip until the count-up lands.
+    if _count_t >= 0.0 or focus.is_empty():
+        _build_default_strip()
+        _refresh_info(focus)
         return
     if plane.upgrade_ids.has(focus):
         var upgrade: Dictionary = sim.aircraft_upgrade(plane.family_id, focus)
         _strip_row.add_child(_icon("upgrade", 2))
         _strip_row.add_child(_label("%s IS FITTED" % String(upgrade.get("name", "")).to_upper(),
             "accent_green", 14))
+        _refresh_info(focus)
         return
     var changes: Array[Dictionary] = _stat_changes(focus)
     var first := true
@@ -325,6 +388,31 @@ func _refresh_strip() -> void:
         _strip_row.add_child(_label("%d %s" % [int(change["from"]), unit], "white", 14))
         _strip_row.add_child(_label("→", "accent_yellow", 14))
         _strip_row.add_child(_label("%d %s" % [int(change["to"]), unit], "accent_green", 14))
+    _refresh_info(focus)
+
+## The shared line under the buttons: an invitation, the kit's blurb, or the
+## plain reason a purchase is off.
+func _refresh_info(focus: String) -> void:
+    if _info_label == null:
+        return
+    var plane: AircraftInstance = _plane()
+    if plane == null or focus.is_empty():
+        _info_label.text = "HOVER A KIT TO PREVIEW IT ON THE PLANE"
+        _info_label.add_theme_color_override("font_color", _colour("panel_light"))
+        return
+    if plane.upgrade_ids.has(focus):
+        _info_label.text = "ALREADY FITTED"
+        _info_label.add_theme_color_override("font_color", _colour("accent_green"))
+        return
+    var verdict: Dictionary = sim.aircraft_upgrade_check(aircraft_id, focus)
+    if not bool(verdict["ok"]):
+        # The bitmap font has no em dash; swap it for a dot the font does have.
+        _info_label.text = String(verdict["reason"]).to_upper().replace("—", "·")
+        _info_label.add_theme_color_override("font_color", _colour("accent_red"))
+        return
+    var upgrade: Dictionary = sim.aircraft_upgrade(plane.family_id, focus)
+    _info_label.text = "%s · CLICK TO BUY" % String(upgrade.get("blurb", "")).to_upper()
+    _info_label.add_theme_color_override("font_color", _colour("white"))
 
 # ---------------------------------------------------------------------------
 # Buying
@@ -335,18 +423,24 @@ func _on_buy(upgrade_id: String) -> void:
     if plane == null:
         return
     var upgrade: Dictionary = sim.aircraft_upgrade(plane.family_id, upgrade_id)
+    # Captured before the purchase lands so the count-up knows where it began.
+    var changes: Array[Dictionary] = _stat_changes(upgrade_id)
     var result: Dictionary = sim.purchase_aircraft_upgrade(aircraft_id, upgrade_id)
     if not bool(result["ok"]):
         refresh()
         return
+    _countup = changes
+    _count_t = 0.0
     _celebrate(upgrade)
     refresh()
 
-## Earning something should look like earning something: the plane flashes,
-## the gained stat floats up off it, and a little confetti burst goes off.
-## All of it is presentation; the sim has already settled the purchase.
+## Earning something should look like earning something: the plane flashes and
+## hops, the gained stat floats up off it, confetti goes off, and the strip
+## counts the new number up. All of it is presentation; the sim has already
+## settled the purchase.
 func _celebrate(upgrade: Dictionary) -> void:
     _flash_frames = 9
+    _bounce_frames = BOUNCE.size()
     var effects: Dictionary = upgrade.get("effects", {})
     var gains: PackedStringArray = []
     if int(effects.get("seats", 0)) != 0:
@@ -380,7 +474,7 @@ func _spawn_confetti() -> void:
     _confetti = []
     var keys: Array[String] = ["accent_orange", "accent_teal", "accent_yellow",
         "accent_green", "accent_red", "white"]
-    var centre := Vector2(size.x * 0.5, GROUND_Y - 56.0)
+    var centre := Vector2(size.x * 0.5, GROUND_Y - 66.0)
     for i in range(22):
         var angle: float = TAU * float(i) / 22.0
         _confetti.append({
@@ -395,6 +489,8 @@ func _process(delta: float) -> void:
     _clock += delta
     if _flash_frames > 0:
         _flash_frames -= 1
+    if _bounce_frames > 0:
+        _bounce_frames -= 1
     if _float_label != null:
         _float_t += delta
         # Whole-pixel steps, so the rising text stays on the pixel grid.
@@ -407,6 +503,7 @@ func _process(delta: float) -> void:
         if _float_t >= FLOAT_SECONDS:
             _float_label.queue_free()
             _float_label = null
+    _advance_countup(delta)
     var alive: Array[Dictionary] = []
     for grain: Dictionary in _confetti:
         grain["age"] = float(grain["age"]) + delta
@@ -420,6 +517,25 @@ func _process(delta: float) -> void:
     _confetti = alive
     queue_redraw()
 
+## The bought stat climbing to its new value on the strip, in green.
+func _advance_countup(delta: float) -> void:
+    if _count_t < 0.0:
+        return
+    _count_t += delta
+    var f: float = clampf(_count_t / COUNT_SECONDS, 0.0, 1.0)
+    for change: Dictionary in _countup:
+        var unit: String = String(change["unit"])
+        var label_v: Variant = _stat_labels.get(unit)
+        if label_v == null or not is_instance_valid(label_v):
+            continue
+        var shown: int = roundi(lerpf(float(change["from"]), float(change["to"]), f))
+        (label_v as Label).text = String(STAT_FORMATS[unit]) % shown
+        (label_v as Label).add_theme_color_override("font_color", _colour("accent_green"))
+    if _count_t >= COUNT_SECONDS:
+        _count_t = -1.0
+        _countup = []
+        _refresh_strip()
+
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
@@ -430,25 +546,29 @@ func _text(at: Vector2, value: String, colour_key: String, size_px: int = 7) -> 
 
 func _draw() -> void:
     _draw_scene()
+    _draw_range_ghost()
     _draw_hero()
+    _draw_kit_ghosts()
     _draw_selection_ring()
     _draw_flash()
     _draw_confetti()
 
-## A sunny apron, same weather as the plane screen next door.
+## A sunny apron, same weather as the plane screen next door, with a little
+## workshop dressing so the shop reads as a place.
 func _draw_scene() -> void:
     draw_rect(Rect2(Vector2.ZERO, size), _colour("sky"))
     _draw_clouds()
     # Header band.
     draw_rect(Rect2(Vector2.ZERO, Vector2(size.x, 22.0)), _colour("panel_deep"))
     draw_rect(Rect2(Vector2(0.0, 22.0), Vector2(size.x, 1.0)), _colour("panel_edge"))
-    # Apron the plane stands on, then grass the cards sit on.
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y - 10.0), Vector2(size.x, 10.0)), _colour("concrete"))
-    draw_rect(Rect2(Vector2(0.0, GROUND_Y - 10.0), Vector2(size.x, 1.0)),
+    # Apron the plane stands on, then grass the buttons sit on.
+    draw_rect(Rect2(Vector2(0.0, GROUND_Y - APRON_H), Vector2(size.x, APRON_H)),
+        _colour("concrete"))
+    draw_rect(Rect2(Vector2(0.0, GROUND_Y - APRON_H), Vector2(size.x, 1.0)),
         _colour("concrete_light"))
     for x in range(0, int(size.x), 48):
-        draw_rect(Rect2(Vector2(float(x), GROUND_Y - 9.0), Vector2(1.0, 9.0)),
-            _colour("taxiway"))
+        draw_rect(Rect2(Vector2(float(x), GROUND_Y - APRON_H + 1.0),
+            Vector2(1.0, APRON_H - 1.0)), _colour("taxiway"))
     draw_rect(Rect2(Vector2(0.0, GROUND_Y), Vector2(size.x, size.y - GROUND_Y)),
         _colour("grass"))
     draw_rect(Rect2(Vector2(0.0, GROUND_Y), Vector2(size.x, 2.0)), _colour("grass_light"))
@@ -456,6 +576,13 @@ func _draw_scene() -> void:
         var gx: float = float((i * 113) % int(size.x))
         var gy: float = GROUND_Y + 8.0 + float((i * 41) % int(size.y - GROUND_Y - 12.0))
         draw_rect(Rect2(Vector2(gx, gy), Vector2(2.0, 1.0)), _colour("grass_dark"))
+    # Workshop dressing beside the plane.
+    if _cart_tex != null:
+        draw_texture(_cart_tex,
+            Vector2(26.0, GROUND_Y - 2.0 - _cart_tex.get_size().y).round())
+    if _cone_tex != null:
+        draw_texture(_cone_tex,
+            Vector2(size.x - 78.0, GROUND_Y - 2.0 - _cone_tex.get_size().y).round())
     # The band the CURRENT -> UPGRADED strip sits on.
     draw_rect(Rect2(Vector2(0.0, STRIP_Y), Vector2(size.x, 22.0)), _colour("panel_deep"))
     draw_rect(Rect2(Vector2(0.0, STRIP_Y + 22.0), Vector2(size.x, 1.0)), _colour("panel_edge"))
@@ -482,13 +609,16 @@ func _draw_hero() -> void:
     var plane: AircraftInstance = _plane()
     if plane == null:
         return
-    var sprite: Texture2D = AircraftSprites.side_sprite(plane.family_id)
+    var sprite: Texture2D = LiverySprites.side_texture(plane)
     if sprite == null:
         return
     var drawn: Vector2 = sprite.get_size() * float(HERO_SCALE)
     var baseline: float = _hero_baseline(plane, sprite)
     var wheels_at: float = (baseline + 1.0) * float(HERO_SCALE)
-    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(GROUND_Y - wheels_at))
+    var hop := 0.0
+    if _bounce_frames > 0:
+        hop = float(BOUNCE[BOUNCE.size() - _bounce_frames])
+    _hero_origin = Vector2(roundf((size.x - drawn.x) * 0.5), roundf(GROUND_Y - wheels_at + hop))
     _hero_size = drawn
     if _hero_bbox.size == Vector2.ZERO:
         var image: Image = sprite.get_image()
@@ -514,25 +644,122 @@ func _hero_baseline(plane: AircraftInstance, sprite: Texture2D) -> float:
             return float((parsed as Dictionary).get("baseline", sprite.get_size().y - 1.0))
     return sprite.get_size().y - 1.0
 
-## A bold ring around the card being considered, drawn outside the panel so
-## the frame art stays untouched.
+# ---------------------------------------------------------------------------
+# Preview ghosts — the kit shown on the plane before any money moves
+# ---------------------------------------------------------------------------
+
+## Ghost paint that gently pulses so it reads as "not real yet".
+func _ghost_colour() -> Color:
+    var ghost := _colour("white")
+    ghost.a = 0.85 if int(_clock * 3.0) % 2 == 0 else 0.55
+    return ghost
+
+## Seats or a crate appearing beside the fuselage for the focused kit.
+func _draw_kit_ghosts() -> void:
+    var kit: Dictionary = _focused_kit()
+    if kit.is_empty() or _hero_bbox.size == Vector2.ZERO:
+        return
+    var effects: Dictionary = kit.get("effects", {})
+    var seats: int = int(effects.get("seats", 0))
+    var cargo: int = int(effects.get("cargo_units", 0))
+    if seats > 0:
+        _draw_ghost_seats(seats)
+    if cargo > 0:
+        _draw_ghost_crate(cargo)
+
+func _draw_ghost_seats(count: int) -> void:
+    var ghost: Color = _ghost_colour()
+    var base: Vector2 = _hero_origin + _hero_bbox.position
+    var gx: float = roundf(base.x + _hero_bbox.size.x + 12.0)
+    var gy: float = roundf(base.y + _hero_bbox.size.y * 0.22)
+    var shown: int = mini(count, 3)
+    for i in range(shown):
+        _seat_outline(Vector2(gx + float(i) * 22.0, gy), ghost)
+    _text(Vector2(gx + float(shown) * 22.0 + 4.0, gy + 18.0), "+%d" % count,
+        "accent_green", 14)
+
+## A side-view seat glyph facing the nose: headrest, backrest, pan, leg.
+func _seat_outline(at: Vector2, colour: Color) -> void:
+    draw_rect(Rect2(at + Vector2(-2.0, 0.0), Vector2(6.0, 3.0)), colour)   # headrest
+    draw_rect(Rect2(at + Vector2(0.0, 3.0), Vector2(4.0, 21.0)), colour)   # backrest
+    draw_rect(Rect2(at + Vector2(4.0, 14.0), Vector2(12.0, 4.0)), colour)  # pan
+    draw_rect(Rect2(at + Vector2(12.0, 18.0), Vector2(3.0, 6.0)), colour)  # leg
+
+func _draw_ghost_crate(count: int) -> void:
+    var ghost: Color = _ghost_colour()
+    var base: Vector2 = _hero_origin + _hero_bbox.position
+    var at := Vector2(roundf(base.x + _hero_bbox.size.x + 14.0),
+        roundf(base.y + _hero_bbox.size.y * 0.52))
+    var box := Rect2(at, Vector2(24.0, 20.0))
+    _dashed_rect(box, ghost)
+    # Plank lines so the ghost reads as a crate, not an empty frame.
+    draw_rect(Rect2(at + Vector2(3.0, 6.0), Vector2(18.0, 2.0)), ghost)
+    draw_rect(Rect2(at + Vector2(3.0, 12.0), Vector2(18.0, 2.0)), ghost)
+    _text(at + Vector2(30.0, 15.0), "+%d" % count, "accent_green", 14)
+
+func _dashed_rect(rect: Rect2, colour: Color) -> void:
+    var x := rect.position.x
+    while x < rect.end.x:
+        var w: float = minf(3.0, rect.end.x - x)
+        draw_rect(Rect2(Vector2(x, rect.position.y), Vector2(w, 1.0)), colour)
+        draw_rect(Rect2(Vector2(x, rect.end.y - 1.0), Vector2(w, 1.0)), colour)
+        x += 5.0
+    var y := rect.position.y
+    while y < rect.end.y:
+        var h: float = minf(3.0, rect.end.y - y)
+        draw_rect(Rect2(Vector2(rect.position.x, y), Vector2(1.0, h)), colour)
+        draw_rect(Rect2(Vector2(rect.end.x - 1.0, y), Vector2(1.0, h)), colour)
+        y += 5.0
+
+## The range kit's promise: a measuring line under the plane that grows out
+## past the nose when the kit is focused.
+func _draw_range_ghost() -> void:
+    var kit: Dictionary = _focused_kit()
+    if kit.is_empty() or _hero_bbox.size == Vector2.ZERO:
+        return
+    var gain: int = int((kit.get("effects", {}) as Dictionary).get("range_nm", 0))
+    if gain <= 0:
+        return
+    var y: float = GROUND_Y - 8.0
+    var left: float = roundf(_hero_origin.x + _hero_bbox.position.x)
+    var right: float = roundf(left + _hero_bbox.size.x)
+    var line := _colour("white")
+    line.a = 0.75
+    draw_rect(Rect2(Vector2(left, y), Vector2(right - left, 2.0)), line)
+    draw_rect(Rect2(Vector2(left, y - 3.0), Vector2(2.0, 8.0)), line)
+    # The gained stretch, growing to full length as the player watches.
+    var grow: float = clampf((_clock - _preview_started) / 0.6, 0.0, 1.0)
+    var ext: float = roundf(64.0 * grow)
+    var bright: Color = _colour("accent_yellow")
+    draw_rect(Rect2(Vector2(right, y), Vector2(ext, 2.0)), bright)
+    if ext > 6.0:
+        var tip: float = right + ext
+        draw_rect(Rect2(Vector2(tip - 4.0, y - 2.0), Vector2(2.0, 2.0)), bright)
+        draw_rect(Rect2(Vector2(tip - 4.0, y + 2.0), Vector2(2.0, 2.0)), bright)
+        draw_rect(Rect2(Vector2(tip - 6.0, y - 4.0), Vector2(2.0, 2.0)), bright)
+        draw_rect(Rect2(Vector2(tip - 6.0, y + 4.0), Vector2(2.0, 2.0)), bright)
+    if grow >= 1.0:
+        _text(Vector2(right + ext - 34.0, y - 8.0), "+%d NM" % gain, "accent_green", 14)
+
+## A bold ring around the kit button being considered, drawn outside the panel
+## so the frame art stays untouched.
 func _draw_selection_ring() -> void:
-    var focus: String = _hovered_id if not _hovered_id.is_empty() else _selected_id
+    var focus: String = _focus_id()
     if focus.is_empty() or not _card_panels.has(focus):
         return
     var panel: PanelContainer = _card_panels[focus]
     if not is_instance_valid(panel) or panel.size.x <= 0.0:
         return
-    var rect: Rect2 = panel.get_global_rect().grow(4.0)
+    var rect: Rect2 = panel.get_global_rect().grow(3.0)
     rect.position = rect.position.round()
     rect.size = rect.size.round()
     var ring := _colour("accent_orange")
-    draw_rect(Rect2(rect.position, Vector2(rect.size.x, 3.0)), ring)
-    draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y - 3.0),
-        Vector2(rect.size.x, 3.0)), ring)
-    draw_rect(Rect2(rect.position, Vector2(3.0, rect.size.y)), ring)
-    draw_rect(Rect2(rect.position + Vector2(rect.size.x - 3.0, 0.0),
-        Vector2(3.0, rect.size.y)), ring)
+    draw_rect(Rect2(rect.position, Vector2(rect.size.x, 2.0)), ring)
+    draw_rect(Rect2(rect.position + Vector2(0.0, rect.size.y - 2.0),
+        Vector2(rect.size.x, 2.0)), ring)
+    draw_rect(Rect2(rect.position, Vector2(2.0, rect.size.y)), ring)
+    draw_rect(Rect2(rect.position + Vector2(rect.size.x - 2.0, 0.0),
+        Vector2(2.0, rect.size.y)), ring)
 
 func _draw_flash() -> void:
     if _flash_frames <= 0 or _hero_bbox.size == Vector2.ZERO:
