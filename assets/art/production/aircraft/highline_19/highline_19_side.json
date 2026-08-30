@@ -1,0 +1,12 @@
+{
+  "canvas": [
+    184,
+    68
+  ],
+  "baseline": 66,
+  "seat_slot": 8,
+  "cargo_slot": 7,
+  "seats": [],
+  "cargo": [],
+  "note": "hero exterior; the cabin interior strip owns seat layout"
+}
