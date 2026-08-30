@@ -7,7 +7,9 @@ extends RefCounted
 
 const SCREEN := Vector2(640.0, 360.0)
 const TOP_BAR_HEIGHT := 15.0
-const PANEL_WIDTH := 150.0
+## Wide enough for a drawn job card ("2 PEOPLE" beside a NO SPACE chip)
+## without truncation — the same width the plane screen's panels use.
+const PANEL_WIDTH := 170.0
 const DOCK_WIDTH := 296.0
 const DOCK_HEIGHT := 96.0
 const ROW_HEIGHT := 20.0
@@ -100,9 +102,11 @@ static func aircraft_badge(family_id: String) -> TextureRect:
 ## A single passenger or crate, used to show capacity as things rather than pips.
 static func payload_pip(is_seat: bool, filled: bool, variant: int = 0) -> Control:
     if not filled:
+        # An empty slot is a recess in the cream dock, not a hole into the old
+        # dark theme: darker card tone, so free capacity reads as room.
         var empty := ColorRect.new()
         empty.custom_minimum_size = Vector2(7.0, 9.0) if is_seat else Vector2(9.0, 9.0)
-        empty.color = colour("ui_bg")
+        empty.color = colour("card_lo")
         return empty
     var node := TextureRect.new()
     var path: String = "people/traveller_teal.png" if is_seat \

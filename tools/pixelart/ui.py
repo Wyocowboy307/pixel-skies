@@ -8,144 +8,10 @@ from __future__ import annotations
 
 from .canvas import Canvas
 
-
-def nine_slice(size: int, border: int, fill: str, edge: str, highlight: str,
-               shade: str) -> Canvas:
-    """A bevelled frame with a 1 px outer outline.
-
-    Light from the upper left: the top and left inner bevel is `highlight`, the
-    bottom and right is `shade`.
-    """
-    canvas = Canvas(size, size)
-    canvas.rect(0, 0, size, size, fill)
-    canvas.rect_outline(0, 0, size, size, "outline")
-    canvas.rect_outline(1, 1, size - 2, size - 2, edge)
-    # Inner bevel.
-    canvas.hline(2, size - 3, 2, highlight)
-    canvas.vline(2, 2, size - 3, highlight)
-    canvas.hline(2, size - 3, size - 3, shade)
-    canvas.vline(size - 3, 2, size - 3, shade)
-    if border >= 4:
-        canvas.plot(2, 2, highlight)
-        canvas.plot(size - 3, size - 3, shade)
-    return canvas
-
-
-def panel() -> Canvas:
-    """Main HUD panel. 4 px border, so the 9-slice centre is 1 px."""
-    return nine_slice(9, 4, "ui_bg", "ui_border", "ui_border_light", "outline")
-
-
-def panel_raised() -> Canvas:
-    return nine_slice(9, 4, "ui_bg_light", "ui_border", "ui_border_light", "outline")
-
-
-def button_normal() -> Canvas:
-    return nine_slice(7, 3, "ui_bg_light", "ui_border", "ui_border_light", "outline")
-
-
-def button_hover() -> Canvas:
-    return nine_slice(7, 3, "ui_border", "ui_border_light", "white", "outline")
-
-
-def button_pressed() -> Canvas:
-    """Pressed inverts the bevel, which is the oldest and clearest press cue."""
-    return nine_slice(7, 3, "ui_bg", "ui_border", "outline", "ui_border_light")
-
-
-def button_disabled() -> Canvas:
-    return nine_slice(7, 3, "ui_bg", "ui_bg_light", "ui_bg_light", "outline")
-
-
-def row_normal() -> Canvas:
-    canvas = Canvas(5, 5)
-    canvas.rect(0, 0, 5, 5, "ui_bg_light")
-    canvas.hline(0, 4, 0, "ui_border")
-    return canvas
-
-
-def row_hover() -> Canvas:
-    canvas = Canvas(5, 5)
-    canvas.rect(0, 0, 5, 5, "ui_border")
-    canvas.hline(0, 4, 0, "ui_border_light")
-    return canvas
-
-
-def warm_panel() -> Canvas:
-    """The default management panel: a warm card, not a dark instrument bezel."""
-    return nine_slice(9, 4, "panel", "panel_edge", "panel_light", "panel_shade")
-
-
-def warm_panel_raised() -> Canvas:
-    return nine_slice(9, 4, "panel_light", "panel_edge", "white", "panel_shade")
-
-
-def warm_button() -> Canvas:
-    return nine_slice(7, 3, "panel_light", "panel_edge", "white", "panel_shade")
-
-
-def warm_button_hover() -> Canvas:
-    return nine_slice(7, 3, "accent_orange_light", "panel_deep", "white", "accent_orange")
-
-
-def warm_button_pressed() -> Canvas:
-    """Pressed inverts the bevel — the oldest and clearest press cue."""
-    return nine_slice(7, 3, "panel_shade", "panel_edge", "panel_shade", "white")
-
-
-def warm_button_disabled() -> Canvas:
-    return nine_slice(7, 3, "panel_shade", "panel_shade", "panel_shade", "panel_shade")
-
-
-def warm_row() -> Canvas:
-    canvas = Canvas(5, 5)
-    canvas.rect(0, 0, 5, 5, "panel_light")
-    canvas.hline(0, 4, 0, "panel_shade")
-    return canvas
-
-
-def warm_row_hover() -> Canvas:
-    canvas = Canvas(5, 5)
-    canvas.rect(0, 0, 5, 5, "accent_orange_light")
-    canvas.hline(0, 4, 0, "white")
-    return canvas
-
-
-## A big, obviously-pressable action button.
-def action_button() -> Canvas:
-    return nine_slice(9, 4, "accent_orange", "panel_deep", "accent_orange_light", "accent_red")
-
-
-def action_button_hover() -> Canvas:
-    return nine_slice(9, 4, "accent_orange_light", "panel_deep", "white", "accent_orange")
-
-
-def action_button_disabled() -> Canvas:
-    return nine_slice(9, 4, "panel_shade", "panel_edge", "panel_shade", "panel_shade")
-
-
-FRAMES: dict[str, callable] = {
-    "warm_panel": warm_panel,
-    "warm_panel_raised": warm_panel_raised,
-    "warm_button_normal": warm_button,
-    "warm_button_hover": warm_button_hover,
-    "warm_button_pressed": warm_button_pressed,
-    "warm_button_disabled": warm_button_disabled,
-    "warm_row_normal": warm_row,
-    "warm_row_hover": warm_row_hover,
-    "action_normal": action_button,
-    "action_hover": action_button_hover,
-    "action_pressed": action_button,
-    "action_disabled": action_button_disabled,
-    "panel": panel,
-    "panel_raised": panel_raised,
-    "button_normal": button_normal,
-    "button_hover": button_hover,
-    "button_pressed": button_pressed,
-    "button_disabled": button_disabled,
-    "row_normal": row_normal,
-    "row_hover": row_hover,
-}
+## The live frame set is the bright "chunky" family at the bottom of this file.
+## The old dark admin set and the intermediate warm set were retired: their
+## PNGs were referenced by no script and only confused art passes.
+FRAMES: dict[str, callable] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -371,28 +237,42 @@ def marker_regional() -> Canvas:
 
 
 def marker_major() -> Canvas:
-    """Larger, with a hole punched through, so a hub reads differently from a
-    regional field without needing a label."""
-    canvas = Canvas(9, 9)
-    for y in range(9):
-        spread = 3 - abs(y - 4) + 1
+    """A hub: an 11px orange diamond with a cream ring and a bright centre
+    pip, so it outranks the plain 7px regional diamond at a glance. The ring
+    is cream rather than light orange because at map scale only that contrast
+    step actually reads as a ring."""
+    canvas = Canvas(11, 11)
+    for y in range(11):
+        spread = 5 - abs(y - 5)
         if spread < 0:
             continue
-        canvas.hline(4 - spread, 4 + spread, y, "accent_orange")
-    canvas.plot(4, 3, "accent_orange_light")
-    canvas.plot(3, 4, "accent_orange_light")
-    canvas.plot(4, 4, "ui_bg")
+        canvas.hline(5 - spread, 5 + spread, y, "accent_orange")
+    # Ring at manhattan radius 3, pip in the middle, one NW glint (light from
+    # the upper left, as everywhere).
+    for y in range(11):
+        for x in range(11):
+            if abs(x - 5) + abs(y - 5) == 3:
+                canvas.plot(x, y, "card")
+    canvas.plot(5, 5, "white")
+    canvas.plot(3, 3, "accent_orange_light")
     canvas.outline()
     return canvas
 
 
 def marker_selected() -> Canvas:
-    """A 13x13 open ring drawn around whichever marker is selected."""
-    canvas = Canvas(13, 13)
-    canvas.ring(6, 6, 5, "white")
-    # Break the ring at the diagonals so it reads as a reticle, not a blob.
-    for x, y in ((2, 2), (10, 2), (2, 10), (10, 10), (3, 3), (9, 3), (3, 9), (9, 9)):
-        canvas.plot(x, y, None)
+    """A 15x15 pulse ring around whichever marker is selected: an open ring
+    broken at the diagonals with a tick at each cardinal, so it reads as a
+    reticle rather than a blob. Drawn white; the overlay modulates the pulse."""
+    canvas = Canvas(15, 15)
+    canvas.ring(7, 7, 6, "white")
+    for y in range(15):
+        for x in range(15):
+            dx = abs(x - 7)
+            dy = abs(y - 7)
+            if dx >= 2 and dy >= 2 and abs(dx - dy) <= 1:
+                canvas.plot(x, y, None)
+    for x, y in ((7, 0), (7, 14), (0, 7), (14, 7)):
+        canvas.plot(x, y, "white")
     return canvas
 
 
@@ -438,10 +318,54 @@ def _btn(fill: str, hi: str, lo: str) -> Canvas:
     return chunky(13, fill, "navy", hi, lo)
 
 
+def hud_bar() -> Canvas:
+    """The top HUD plate: a sky-blue slab with one crisp navy edge, a lit top
+    lip and a shaded base. Thinner chrome than chunky() — a 1px navy edge
+    instead of 2px — so at bar height most of the plate is still sky."""
+    size = 13
+    canvas = Canvas(size, size)
+    canvas.rect(0, 0, size, size, "hud_blue")
+    canvas.rect_outline(0, 0, size, size, "outline")
+    canvas.rect_outline(1, 1, size - 2, size - 2, "navy")
+    canvas.hline(2, size - 3, 2, "btn_blue_hi")
+    canvas.vline(2, 3, size - 4, "btn_blue_hi")
+    canvas.hline(2, size - 3, size - 3, "hud_blue_deep")
+    canvas.vline(size - 3, 3, size - 4, "hud_blue_deep")
+    return canvas
+
+
+def hud_plate() -> Canvas:
+    """A small plate set INTO the HUD bar — dark top shadow, light bottom lip,
+    the inverse of a raised card — so the money and fleet readouts look like
+    gauges built into the bar rather than text floating on a strip."""
+    canvas = Canvas(5, 5)
+    canvas.rect(0, 0, 5, 5, "hud_blue_deep")
+    canvas.rect_outline(0, 0, 5, 5, "navy")
+    canvas.hline(1, 3, 1, "navy_deep")
+    canvas.hline(1, 3, 3, "hud_blue")
+    return canvas
+
+
+def tag_chip() -> Canvas:
+    """A luggage-tag chip: warm yellow card, 1px outline, lit top lip and a
+    punched hole. The hole sits in the top-left 6px corner of the 9-slice, and
+    a corner is never stretched, so it appears exactly once per chip — the
+    same tag language as the map's hand-drawn callsign chip."""
+    size = 13
+    canvas = Canvas(size, size)
+    canvas.rect(0, 0, size, size, "accent_yellow")
+    canvas.rect_outline(0, 0, size, size, "outline")
+    canvas.hline(1, size - 2, 1, "card_hi")
+    canvas.rect(2, 3, 2, 2, "outline")
+    return canvas
+
+
 FRAMES.update({
     "card": lambda: chunky(13, "card", "navy", "card_hi", "card_lo"),
     "card_raised": lambda: chunky(13, "card_hi", "navy", "white", "card_lo"),
-    "hud_bar": lambda: chunky(13, "hud_blue", "navy", "btn_blue_hi", "hud_blue_deep"),
+    "hud_bar": hud_bar,
+    "hud_plate": hud_plate,
+    "tag_chip": tag_chip,
     "btn_plain_normal": lambda: _btn("card", "card_hi", "card_lo"),
     "btn_plain_hover": lambda: _btn("card_hi", "white", "card_lo"),
     "btn_plain_pressed": lambda: _btn("card_lo", "card_lo", "card_hi"),

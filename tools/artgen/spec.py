@@ -98,7 +98,7 @@ STARTER: list[AssetSpec] = [
             "two fat black wheels on short legs, cream body with an orange "
             "belly stripe, flat blocks of solid colour with no gradients"
         ),
-        size=(128, 96), view="side", direction="west", coverage=86.0,
+        size=(128, 96), view="side", direction="east", coverage=86.0,
         is_reference=True,
         notes="THE reference asset. Everything else is style-matched to this one.",
     ),

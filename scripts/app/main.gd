@@ -295,6 +295,8 @@ func open_aircraft_detail(aircraft_id: String) -> void:
     _detail_view.bind(sim, aircraft_id)
     _detail_view.closed.connect(close_aircraft_detail)
     _detail_view.dispatched.connect(_on_detail_dispatched)
+    _detail_view.customize_requested.connect(open_customize)
+    _detail_view.upgrade_requested.connect(open_upgrade)
     _hud.visible = false
     if _airport_hud != null:
         _airport_hud.visible = false

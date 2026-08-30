@@ -157,15 +157,22 @@ oversized fins and propellers, fat wheels. Proportions are hand-tuned per family
 in `tools/pixelart/aircraft.py` (`SIDE_STYLES`), and the body ratio itself
 carries the size tier.
 
-Sizes are chosen so the detail view draws them at **1:1**. Scaling a sprite up
-to fill the screen makes its pixels coarser than the UI around it; drawing it
-big natively keeps one pixel density everywhere.
+Side sprites are drawn at the density of the approved Trailhopper master and
+displayed at one shared integer hero scale (currently 2×), so every family
+keeps the same pixel density on the plane, paint and upgrade screens. The
+binding constraint is the **hero band**: at the shared scale the whole
+airframe — wheels to fin tip — must fit between the screen top and the apron
+line (content no taller than ~80 px). Canvases are therefore sized per family
+around their art, not to fixed tiers:
 
-| tier | canvas | body ratio |
+| family | canvas | reads as |
 | --- | --- | --- |
-| small | 208×120 | 2.5 : 1 |
-| medium | 264×144 | 2.9 : 1 |
-| large | 320×176 | 3.3 : 1 |
+| Trailhopper 4 | 128×96 | tiny and chunky |
+| Twinwing 8 | 160×84 | wider, more capable |
+| Highline 19 | 184×68 | long, low, serious |
+
+Length carries the size progression; the height budget keeps them stubby,
+which is the toy language doing its job.
 
 The metric spec still governs the top view. The two views agree on everything
 that carries identity — wing position, engine count and layout, gear type,

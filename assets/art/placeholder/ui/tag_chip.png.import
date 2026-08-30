@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bmh5p6sao05nw"
-path="res://.godot/imported/warm_row_hover.png-88033b2795a7e58d7ce7c7c368d71b92.ctex"
+uid="uid://dffxmigdfawki"
+path="res://.godot/imported/tag_chip.png-7d2f2f1dc75ca2052e176d9910b4cbfb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/placeholder/ui/warm_row_hover.png"
-dest_files=["res://.godot/imported/warm_row_hover.png-88033b2795a7e58d7ce7c7c368d71b92.ctex"]
+source_file="res://assets/art/placeholder/ui/tag_chip.png"
+dest_files=["res://.godot/imported/tag_chip.png-7d2f2f1dc75ca2052e176d9910b4cbfb.ctex"]
 
 [params]
 

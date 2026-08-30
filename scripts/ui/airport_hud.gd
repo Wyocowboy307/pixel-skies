@@ -17,6 +17,7 @@ var routing := false
 var _watching := false
 var selected_destination := ""
 
+var _font: Font
 var _job_panel: PanelContainer
 var _job_list: VBoxContainer
 var _job_header: Label
@@ -42,6 +43,7 @@ func _ready() -> void:
     # rect stays zero and every anchored child collapses into the corner.
     size = get_viewport_rect().size
     get_viewport().size_changed.connect(func() -> void: size = get_viewport_rect().size)
+    _font = load(AssetPaths.resolve_file("ui/font5x7.fnt"))
     _build_job_panel()
     _build_dock()
     _build_route_panel()
@@ -77,7 +79,7 @@ func select_aircraft(aircraft_id: String) -> void:
 
 func _side_panel(on_left: bool) -> PanelContainer:
     var panel := PanelContainer.new()
-    panel.set_anchors_preset(Control.PRESET_LEFT_WIDE if on_left else Control.PRESET_RIGHT_WIDE)
+    panel.set_anchors_preset(Control.PRESET_TOP_LEFT if on_left else Control.PRESET_TOP_RIGHT)
     if on_left:
         panel.offset_left = UiTheme.MARGIN
         panel.offset_right = UiTheme.MARGIN + UiTheme.PANEL_WIDTH
@@ -85,9 +87,19 @@ func _side_panel(on_left: bool) -> PanelContainer:
         panel.offset_left = -UiTheme.MARGIN - UiTheme.PANEL_WIDTH
         panel.offset_right = -UiTheme.MARGIN
     panel.offset_top = UiTheme.TOP_BAR_HEIGHT + 5.0
-    panel.offset_bottom = -UiTheme.DOCK_HEIGHT - 8.0
+    panel.offset_bottom = panel.offset_top + 60.0
     add_child(panel)
     return panel
+
+## Panels hug the rows they hold instead of running a full-height white slab
+## over the airfield. A long board caps just above the dock and scrolls inside.
+func _fit_panel(panel: PanelContainer, rows: int) -> void:
+    var top: float = UiTheme.TOP_BAR_HEIGHT + 5.0
+    # 9px header line + 2px separation + 40px cards with 2px gaps, inside the
+    # card frame's 9px vertical content margins.
+    var content: float = 9.0 + 2.0 + float(maxi(rows, 1)) * 42.0 - 2.0
+    var max_height: float = size.y - UiTheme.DOCK_HEIGHT - 6.0 - top
+    panel.offset_bottom = top + minf(content + 18.0, max_height)
 
 func _build_job_panel() -> void:
     _job_panel = _side_panel(true)
@@ -105,7 +117,7 @@ func _build_job_panel() -> void:
     column.add_child(scroll)
 
     _job_list = VBoxContainer.new()
-    _job_list.add_theme_constant_override("separation", 1)
+    _job_list.add_theme_constant_override("separation", 2)
     _job_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(_job_list)
 
@@ -189,9 +201,14 @@ func _build_route_panel() -> void:
     column.add_theme_constant_override("separation", 2)
     _route_panel.add_child(column)
     column.add_child(UiTheme.label("WHERE TO?", "accent_orange"))
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    column.add_child(scroll)
     _route_list = VBoxContainer.new()
-    _route_list.add_theme_constant_override("separation", 1)
-    column.add_child(_route_list)
+    _route_list.add_theme_constant_override("separation", 2)
+    _route_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(_route_list)
 
 # ---------------------------------------------------------------------------
 # Rows
@@ -240,67 +257,45 @@ func _refresh_jobs() -> void:
     _job_header.text = "%s JOBS · %d" % [String(airport.get("code", "")), board.size()]
     for job: Job in board:
         _job_list.add_child(_job_row(job))
+    _fit_panel(_job_panel, board.size())
 
+## One job as a drawn card, same visual language as the plane screen: the face
+## or crate at 2x, the destination code big, coin + pay, and a FITS / NO SPACE
+## chip — not a table row beside hand-drawn cards elsewhere.
 func _job_row(job: Job) -> Control:
     var verdict: Dictionary = _load_verdict(job)
     var allowed: bool = bool(verdict["ok"])
-    var button := Button.new()
-    # Tall enough for two 7px lines inside the chunky frame; the old 20px rows
-    # clipped their own text.
-    button.custom_minimum_size = Vector2(0.0, 38.0)
-    button.clip_contents = true
-    button.tooltip_text = String(verdict["reason"])
-    button.pressed.connect(func() -> void: _on_job_pressed(job))
-    button.mouse_entered.connect(func() -> void: destination_hovered.emit(job.destination_id))
-
-    var row := HBoxContainer.new()
-    row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    row.set_anchors_preset(Control.PRESET_FULL_RECT)
-    row.add_theme_constant_override("separation", 4)
-    button.add_child(row)
-
-    # The job is a person or a crate, not an abstract row.
-    var face := TextureRect.new()
-    var art: String = "people/portrait_%d.png" % (absi(hash(job.id)) % 5)
-    if job.kind != "passenger":
-        var kind: String = "box"
-        if job.presentation.contains("mail"):
-            kind = "mail"
-        elif job.presentation.contains("medical"):
-            kind = "medical"
-        elif job.presentation.contains("livestock"):
-            kind = "livestock"
-        art = "cargo/crate_%s.png" % kind
-    face.texture = AssetPaths.load_texture(art)
-    face.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-    face.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-    face.custom_minimum_size = Vector2(16.0, 0.0)
-    row.add_child(face)
-
-    var middle := VBoxContainer.new()
-    middle.add_theme_constant_override("separation", 0)
-    middle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    row.add_child(middle)
     var destination: Dictionary = sim.db.airports.get(job.destination_id, {})
-    middle.add_child(UiTheme.label("%s TO %s" % [UiTheme.job_summary(job),
-        String(destination.get("code", "?"))], "navy" if allowed else "ink_soft"))
-    # Second line carries the money and the verdict, so nothing ever sits on
-    # top of the headline. A blocked job goes quiet grey, not shouting red.
-    var footer := HBoxContainer.new()
-    footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    footer.add_theme_constant_override("separation", 3)
-    middle.add_child(footer)
-    if allowed:
-        footer.add_child(UiTheme.label(UiTheme.money(job.reward), "btn_green_lo"))
-        var gap := Control.new()
-        gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        footer.add_child(gap)
-        footer.add_child(UiTheme.fits_badge(true))
-    else:
-        footer.add_child(UiTheme.label(String(verdict["reason"]).to_upper(), "ink_soft"))
-    return button
+
+    var card := AircraftDetailView.VisualCard.new()
+    card.font = _font
+    card.face = _job_face(job)
+    card.title = String(destination.get("code", "?"))
+    card.subtitle = UiTheme.job_summary(job)
+    card.value = UiTheme.money(job.reward)
+    card.value_icon = AssetPaths.load_texture("ui/icons/money.png")
+    card.badge_ok = allowed
+    card.badge_text = "FITS" if allowed else "NO SPACE"
+    if not allowed:
+        card.reason = AircraftDetailView.short_reason(String(verdict["reason"]))
+    card.tooltip_text = String(verdict["reason"])
+    card.pressed.connect(func() -> void: _on_job_pressed(job))
+    card.mouse_entered.connect(func() -> void: destination_hovered.emit(job.destination_id))
+    return card
+
+## Who or what is asking to fly: a portrait for people, the crate for cargo.
+func _job_face(job: Job) -> Texture2D:
+    if job.kind == "passenger":
+        return AssetPaths.load_texture("people/portrait_%d.png" % (absi(hash(job.id)) % 5))
+    var kind := "box"
+    if job.presentation.contains("mail"):
+        kind = "mail"
+    elif job.presentation.contains("medical"):
+        kind = "medical"
+    elif job.presentation.contains("livestock"):
+        kind = "livestock"
+    return AssetPaths.load_texture("cargo/crate_%s.png" % kind)
+
 func _load_verdict(job: Job) -> Dictionary:
     var plane: AircraftInstance = sim.state.aircraft.get(selected_aircraft_id, null)
     if plane == null:
@@ -415,43 +410,45 @@ func _refresh_route() -> void:
         _preview.text = ""
         _dispatch_button.disabled = true
         return
+    var rows := 0
     for candidate_id: String in sim.state.unlocked_airport_ids:
         if candidate_id != airport_id:
             _route_list.add_child(_route_row(candidate_id))
+            rows += 1
+    _fit_panel(_route_panel, rows)
     _update_preview()
 
+## One destination as a little boarding pass: plane glyph on the stub, the code
+## big, city and flight time under it, profit as the fare, READY / NO GO chip.
 func _route_row(destination_id: String) -> Control:
     var verdict: Dictionary = sim.dispatch_check(selected_aircraft_id, destination_id)
     var preview: Dictionary = sim.dispatch_preview(selected_aircraft_id, destination_id)
     var allowed: bool = bool(verdict["ok"])
     var destination: Dictionary = sim.db.airports.get(destination_id, {})
 
-    var parts: Dictionary = _row(UiTheme.ROW_HEIGHT + 4.0)
-    var button: Button = parts["button"]
-    var row: HBoxContainer = parts["row"]
-    button.pressed.connect(func() -> void:
+    var card := AircraftDetailView.VisualCard.new()
+    card.font = _font
+    card.face = AssetPaths.load_texture("ui/icons/plane.png")
+    card.boarding_pass = true
+    card.title = String(destination.get("code", ""))
+    card.subtitle = "%s · %s" % [String(destination.get("city", "")).to_upper(),
+        UiTheme.duration(float(preview.get("duration_seconds", 0.0)))]
+    if allowed:
+        var profit: int = int(preview.get("profit", 0))
+        card.value = UiTheme.money(profit)
+        card.value_bad = profit < 0
+        card.value_icon = AssetPaths.load_texture("ui/icons/money.png")
+    card.badge_ok = allowed
+    card.badge_text = "READY" if allowed else "NO GO"
+    if not allowed:
+        card.reason = AircraftDetailView.short_reason(String(verdict["reason"]))
+    card.tooltip_text = String(verdict["reason"])
+    card.highlighted = destination_id == selected_destination
+    card.pressed.connect(func() -> void:
         selected_destination = destination_id
         _refresh_route())
-    button.mouse_entered.connect(func() -> void: destination_hovered.emit(destination_id))
-
-    var column := VBoxContainer.new()
-    column.add_theme_constant_override("separation", 0)
-    column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    row.add_child(column)
-
-    var chosen: String = " <" if destination_id == selected_destination else ""
-    column.add_child(UiTheme.label("%s %s%s" % [String(destination.get("code", "")),
-        String(destination.get("city", "")), chosen], "text" if allowed else "text_dim"))
-    if allowed:
-        column.add_child(UiTheme.label("%dNM · %s · %s" % [
-            roundi(float(preview.get("distance_nm", 0.0))),
-            UiTheme.duration(float(preview.get("duration_seconds", 0.0))),
-            UiTheme.money(int(preview.get("profit", 0)))],
-            "accent_green" if int(preview.get("profit", 0)) >= 0 else "accent_red"))
-    else:
-        column.add_child(UiTheme.label(String(verdict["reason"]), "accent_red"))
-    return button
+    card.mouse_entered.connect(func() -> void: destination_hovered.emit(destination_id))
+    return card
 
 func _update_preview() -> void:
     if selected_destination.is_empty():

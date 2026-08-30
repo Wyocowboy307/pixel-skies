@@ -10,7 +10,10 @@ extends Control
 
 signal closed()
 
-const HERO_SCALE := 3
+## Same integer scale as the plane screen and upgrade shop, so the aircraft
+## stays one size across adjacent screens (and the props no longer collide
+## with the wider scale-3 sprite).
+const HERO_SCALE := 2
 const GROUND_Y := 262.0
 const DOCK_SIZE := Vector2(168.0, 82.0)
 const IDENTITY_SIZE := Vector2(140.0, 106.0)

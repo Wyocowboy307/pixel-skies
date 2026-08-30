@@ -35,6 +35,11 @@ const SEAT_POSITIONS := 6         ## four base seats + two from Cabin Plus
 const HOLD_X := 8.0
 const HOLD_W := 138.0
 const PANEL_W := 170.0
+## Job/route panels hang from here and may never grow past the action row
+## (which starts at y 170): the LOAD/ROUTE/FLY verbs stay clickable and the
+## cabin strip stays visible no matter how long the list gets.
+const PANEL_TOP := 40.0
+const PANEL_MAX_BOTTOM := 166.0
 const TRAVEL_SECONDS := 0.42
 
 ## Hold luggage: art and top-left position per cargo slot, floor-first so a
@@ -59,7 +64,10 @@ var _hero_origin := Vector2.ZERO
 
 var _title: Label
 var _subtitle: Label
-var _notice: Label
+## Guidance/refusal line, drawn as a baggage tag under the route strip rather
+## than a bare Label, so it owns its pixels instead of colliding with the
+## action row or the fuselage skin.
+var _notice_text := ""
 var _fly_button: Button
 var _job_panel: PanelContainer
 var _job_list: VBoxContainer
@@ -189,14 +197,6 @@ func _build_chrome() -> void:
     upgrade.pressed.connect(func() -> void: upgrade_requested.emit(aircraft_id))
     actions.add_child(upgrade)
 
-    _notice = UiTheme.label("", "accent_orange_light")
-    _notice.set_anchors_preset(Control.PRESET_CENTER_TOP)
-    _notice.offset_top = 203.0
-    _notice.offset_left = -150.0
-    _notice.offset_right = 150.0
-    _notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    add_child(_notice)
-
     _job_panel = _side_panel(true)
     _job_list = _panel_list(_job_panel, "JOBS HERE")
     _route_panel = _side_panel(false)
@@ -206,18 +206,27 @@ func _build_chrome() -> void:
 
 func _side_panel(on_left: bool) -> PanelContainer:
     var panel := PanelContainer.new()
-    panel.set_anchors_preset(Control.PRESET_LEFT_WIDE if on_left else Control.PRESET_RIGHT_WIDE)
+    panel.set_anchors_preset(Control.PRESET_TOP_LEFT if on_left else Control.PRESET_TOP_RIGHT)
     if on_left:
         panel.offset_left = 6.0
         panel.offset_right = 6.0 + PANEL_W
     else:
         panel.offset_left = -6.0 - PANEL_W
         panel.offset_right = -6.0
-    panel.offset_top = 40.0
-    panel.offset_bottom = -30.0
+    panel.offset_top = PANEL_TOP
+    panel.offset_bottom = PANEL_MAX_BOTTOM
     panel.visible = false
     add_child(panel)
     return panel
+
+## Size a side panel to the rows it holds: a hand of two cards is a small card
+## tray, not a white column down the screen. Longer lists cap above the action
+## row and scroll inside instead of covering LOAD/ROUTE/FLY.
+func _fit_panel(panel: PanelContainer, rows: int) -> void:
+    # 9px title line + 2px separation + 40px cards with 2px gaps, inside the
+    # card frame's 9px vertical content margins.
+    var content: float = 9.0 + 2.0 + float(maxi(rows, 1)) * 42.0 - 2.0
+    panel.offset_bottom = PANEL_TOP + minf(content + 18.0, PANEL_MAX_BOTTOM - PANEL_TOP)
 
 func _panel_list(panel: PanelContainer, title: String) -> VBoxContainer:
     var column := VBoxContainer.new()
@@ -260,8 +269,12 @@ func _build_details() -> void:
 
 func _set_mode(mode: String) -> void:
     _mode = "" if _mode == mode else mode
-    _notice.text = ""
+    _set_notice("")
     refresh()
+
+func _set_notice(text: String) -> void:
+    _notice_text = text
+    queue_redraw()
 
 # ---------------------------------------------------------------------------
 # Refresh
@@ -280,14 +293,16 @@ func refresh() -> void:
     var flying: bool = plane.state == AircraftInstance.State.IN_FLIGHT
     _fly_button.disabled = flying or loaded.is_empty() or _selected_destination.is_empty()
     # A disabled FLY says what unlocks it, so the biggest verb in the game is
-    # never a mystery.
-    if _notice.text.is_empty():
-        if flying:
-            _notice.text = ""
-        elif loaded.is_empty():
-            _notice.text = "LOAD SOMETHING FIRST"
+    # never a mystery. Guidance re-derives every refresh so it clears itself
+    # the moment its advice is taken; only sim refusals persist until the next
+    # action.
+    if _notice_text == "LOAD SOMETHING FIRST" or _notice_text == "PICK A ROUTE":
+        _notice_text = ""
+    if _notice_text.is_empty() and not flying:
+        if loaded.is_empty():
+            _notice_text = "LOAD SOMETHING FIRST"
         elif _selected_destination.is_empty():
-            _notice.text = "PICK A ROUTE"
+            _notice_text = "PICK A ROUTE"
 
     _job_panel.visible = _mode == "load" and not flying
     _route_panel.visible = _mode == "route" and not flying
@@ -306,6 +321,7 @@ func _refresh_jobs() -> void:
     board.sort_custom(func(a: Job, b: Job) -> bool: return a.reward > b.reward)
     for job: Job in board:
         _job_list.add_child(_job_card(job))
+    _fit_panel(_job_panel, board.size())
 
 ## A job card, not a table row: a face or a crate, the destination big, plain
 ## language for the load, the payout in green and a clear FITS / NO SPACE call.
@@ -326,13 +342,14 @@ func _job_card(job: Job) -> Control:
     card.badge_ok = allowed
     card.badge_text = "FITS" if allowed else "NO SPACE"
     if not allowed:
-        card.reason = _short_reason(String(verdict["reason"]))
+        card.reason = short_reason(String(verdict["reason"]))
     card.pressed.connect(func() -> void: _on_load_job(job, card))
     return card
 
 ## The rules explain at sentence length; a 40 px card gets the plain kernel.
 ## The full sentence still appears in the notice line if the player insists.
-func _short_reason(reason: String) -> String:
+## Static so the airport job board can compress the same sentences.
+static func short_reason(reason: String) -> String:
     var text: String = reason.to_lower()
     if text.contains("needed,"):
         # "2 seats needed, 1 free" -> "1 FREE"
@@ -374,9 +391,9 @@ func _on_load_job(job: Job, from_control: Control) -> void:
     var used_before: Dictionary = Rules.load_used(sim.state.loaded_jobs(plane.id))
     var result: Dictionary = sim.load_job(aircraft_id, job.id)
     if not bool(result["ok"]):
-        _notice.text = String(result["reason"])
+        _set_notice(String(result["reason"]).to_upper())
         return
-    _notice.text = ""
+    _set_notice("")
     var is_seat: bool = job.seats > 0
     var first_index: int = int(used_before["seats"]) if is_seat \
         else int(used_before["cargo_units"])
@@ -398,10 +415,13 @@ func _on_load_job(job: Job, from_control: Control) -> void:
 func _refresh_routes() -> void:
     for child: Node in _route_list.get_children():
         child.queue_free()
+    var rows := 0
     for candidate: String in sim.state.unlocked_airport_ids:
         if candidate == _plane().location_id:
             continue
         _route_list.add_child(_route_card(candidate))
+        rows += 1
+    _fit_panel(_route_panel, rows)
 
 ## Route cards get the same visual treatment as jobs: destination big, the
 ## flight in plain terms, expected profit, and whether the plane can make it.
@@ -413,7 +433,8 @@ func _route_card(destination_id: String) -> Control:
 
     var card := VisualCard.new()
     card.font = _font
-    card.face = _texture("ui/icons/route.png")
+    card.face = _texture("ui/icons/plane.png")
+    card.boarding_pass = true
     card.title = String(destination.get("code", ""))
     card.subtitle = "%s · %s" % [String(destination.get("city", "")).to_upper(),
         UiTheme.duration(float(preview.get("duration_seconds", 0.0)))]
@@ -425,7 +446,7 @@ func _route_card(destination_id: String) -> Control:
     card.badge_ok = allowed
     card.badge_text = "READY" if allowed else "NO GO"
     if not allowed:
-        card.reason = _short_reason(String(verdict["reason"]))
+        card.reason = short_reason(String(verdict["reason"]))
     card.highlighted = destination_id == _selected_destination
     card.pressed.connect(func() -> void:
         _selected_destination = destination_id
@@ -460,7 +481,7 @@ func _refresh_details() -> void:
 func _on_fly() -> void:
     var result: Dictionary = sim.dispatch(aircraft_id, _selected_destination)
     if not bool(result["ok"]):
-        _notice.text = String(result["reason"])
+        _set_notice(String(result["reason"]).to_upper())
         refresh()
         return
     dispatched.emit(String(result.get("flight_id", "")))
@@ -495,6 +516,7 @@ func _draw() -> void:
     _draw_hero(plane)
     _draw_cabin(plane)
     _draw_route_strip(plane)
+    _draw_notice()
     _draw_in_transit()
 
 ## Good weather on the apron above, the cabin cross-section below.
@@ -655,10 +677,7 @@ func _draw_seat_row(seats_used: int, seat_limit: int) -> void:
     for index in range(SEAT_POSITIONS):
         var at: Vector2 = _seat_position(index)
         if index >= seat_limit:
-            # Not installed in this configuration: a grey socket, so spare
-            # airframe capacity is something you can see and buy into.
-            draw_texture_rect(seat, Rect2(at.round(), seat.get_size()), false,
-                Color(0.56, 0.58, 0.64))
+            _draw_seat_socket(at)
             continue
         var boarded: bool = index < seats_used and not pending.has(index)
         if boarded:
@@ -667,6 +686,28 @@ func _draw_seat_row(seats_used: int, seat_limit: int) -> void:
             if passenger != null:
                 draw_texture(passenger, (at + Vector2(12.0, 4.0)).round())
         draw_texture(seat, at.round())
+
+## A seat position beyond this configuration's capacity is an upgrade socket,
+## not a piece of furniture: a dim frame on the wall where a seat could bolt
+## in, a rail shadow on the carpet, and two stud fittings — all workshop greys,
+## so the honest headcount is the seats, and the room to grow is visibly bare.
+func _draw_seat_socket(at: Vector2) -> void:
+    at = at.round()
+    var frame := Rect2(at + Vector2(12.0, 30.0), Vector2(36.0, 58.0))
+    var grey: Color = _colour("concrete_light")
+    draw_rect(Rect2(frame.position, Vector2(frame.size.x, 1.0)), grey)
+    draw_rect(Rect2(frame.position + Vector2(0.0, frame.size.y - 1.0),
+        Vector2(frame.size.x, 1.0)), grey)
+    draw_rect(Rect2(frame.position, Vector2(1.0, frame.size.y)), grey)
+    draw_rect(Rect2(frame.position + Vector2(frame.size.x - 1.0, 0.0),
+        Vector2(1.0, frame.size.y)), grey)
+    # Floor shadow under the empty anchor points, then the seat-rail studs.
+    draw_rect(Rect2(Vector2(at.x + 8.0, FLOOR_TOP - 2.0), Vector2(44.0, 3.0)),
+        _colour("concrete"))
+    draw_rect(Rect2(Vector2(at.x + 14.0, FLOOR_TOP - 5.0), Vector2(5.0, 3.0)),
+        _colour("metal"))
+    draw_rect(Rect2(Vector2(at.x + 40.0, FLOOR_TOP - 5.0), Vector2(5.0, 3.0)),
+        _colour("metal"))
 
 ## One quiet line on the skin band saying the same thing the furniture shows.
 func _draw_capacity_line(seats_used: int, seat_limit: int,
@@ -704,6 +745,27 @@ func _draw_route_strip(plane: AircraftInstance) -> void:
     draw_rect(box, _colour("panel_deep"))
     draw_rect(Rect2(box.position, Vector2(box.size.x, 1.0)), _colour("panel_edge"))
     _text(Vector2(roundf((size.x - width) * 0.5), y), text, colour)
+
+## Guidance and refusals as a little baggage tag hanging under the route strip:
+## warm yellow card, punched hole, navy text — the same tag language as the
+## world map's flight chip. It owns its own pixels up in the sky, clear of the
+## action row and the fuselage band it used to straddle.
+func _draw_notice() -> void:
+    if _notice_text.is_empty():
+        return
+    var width: float = _font.get_string_size(
+        _notice_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 7).x
+    var tag := Rect2(Vector2(roundf((size.x - width - 20.0) * 0.5), 38.0),
+        Vector2(width + 20.0, 15.0))
+    # A short twine loop above the punched hole, so the card hangs like a tag.
+    draw_rect(Rect2(tag.position + Vector2(5.0, -5.0), Vector2(2.0, 4.0)),
+        _colour("panel_edge"))
+    draw_rect(tag.grow(1.0), _colour("outline"))
+    draw_rect(tag, _colour("accent_yellow"))
+    draw_rect(Rect2(tag.position, Vector2(tag.size.x, 1.0)), _colour("card_hi"))
+    draw_rect(Rect2(tag.position + Vector2(4.0, 6.0), Vector2(4.0, 4.0)), _colour("outline"))
+    draw_rect(Rect2(tag.position + Vector2(5.0, 7.0), Vector2(2.0, 2.0)), _colour("sky"))
+    _text(tag.position + Vector2(13.0, 11.0), _notice_text, "navy_deep")
 
 ## Payload in flight from the job list to its place in the cabin, on a shallow
 ## arc. Passengers hop as the same sprite that will sit in the seat.
@@ -754,6 +816,9 @@ class VisualCard extends Button:
     var badge_text := ""
     var badge_ok := true
     var highlighted := false
+    ## Route cards read as boarding passes: a perforated tear line between the
+    ## stub (the plane glyph) and the body of the pass.
+    var boarding_pass := false
 
     func _init() -> void:
         custom_minimum_size = Vector2(0.0, CARD_HEIGHT)
@@ -775,9 +840,17 @@ class VisualCard extends Button:
                 roundf((CARD_HEIGHT - drawn.y) * 0.5))
             draw_texture_rect(face, Rect2(icon_at, drawn), false)
 
+        if boarding_pass:
+            # Dashed perforation between the stub and the pass body.
+            var tear_x: float = PAD + ICON_BOX + 1.0
+            var ty := 4.0
+            while ty < CARD_HEIGHT - 4.0:
+                draw_rect(Rect2(Vector2(tear_x, ty), Vector2(1.0, 2.0)), _colour("card_lo"))
+                ty += 4.0
+
         # Destination, big and navy. The one word the player scans for.
         draw_string(font, Vector2(text_x, 17.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1,
-            TITLE_SIZE, _colour("ui_bg"))
+            TITLE_SIZE, _colour("navy"))
 
         var badge_width: float = font.get_string_size(
             badge_text, HORIZONTAL_ALIGNMENT_LEFT, -1, SMALL_SIZE).x + 8.0

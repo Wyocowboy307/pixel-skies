@@ -23,6 +23,20 @@ static func build() -> Theme:
     theme.set_stylebox("panel", "CardRaised", _frame("card_raised", 6, 4))
     theme.set_type_variation("HudBar", "PanelContainer")
     theme.set_stylebox("panel", "HudBar", _frame("hud_bar", 6, 3))
+    # The top bar itself: same plate art, but with trimmed vertical content
+    # margins — its outline row hangs off the top of the screen, so the stock
+    # margins would push the readouts against the bottom edge.
+    theme.set_type_variation("HudTop", "PanelContainer")
+    var hud_top := _frame("hud_bar", 6, 3)
+    hud_top.content_margin_top = 4.0
+    hud_top.content_margin_bottom = 5.0
+    theme.set_stylebox("panel", "HudTop", hud_top)
+    # Small inset plates inside the bar (money, fleet).
+    theme.set_type_variation("HudPlate", "PanelContainer")
+    theme.set_stylebox("panel", "HudPlate", _frame("hud_plate", 2, 1))
+    # Luggage-tag chips (follow banner) — warm yellow with the punched hole.
+    theme.set_type_variation("TagChip", "PanelContainer")
+    theme.set_stylebox("panel", "TagChip", _frame("tag_chip", 6, 3))
 
     # Plain buttons: cream, chunky.
     for state: String in ["normal", "hover", "pressed", "disabled"]:

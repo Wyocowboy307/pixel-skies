@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bdxqlnuqd40pl"
-path="res://.godot/imported/warm_button_pressed.png-22887f62656f3f43ee697c932170265e.ctex"
+uid="uid://b2gww0kkx5sdy"
+path="res://.godot/imported/cloud_0.png-3584ff1ada659418fce8661ee8481dca.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/placeholder/ui/warm_button_pressed.png"
-dest_files=["res://.godot/imported/warm_button_pressed.png-22887f62656f3f43ee697c932170265e.ctex"]
+source_file="res://assets/art/production/world/cloud_0.png"
+dest_files=["res://.godot/imported/cloud_0.png-3584ff1ada659418fce8661ee8481dca.ctex"]
 
 [params]
 

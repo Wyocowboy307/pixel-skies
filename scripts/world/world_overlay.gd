@@ -17,8 +17,8 @@ const ROUTE_SAMPLES := 32
 const CLICK_RADIUS := 10.0
 const DOUBLE_CLICK_SECONDS := 0.35
 const LABEL_FONT_SIZE := 7
-## Labels never intrude under the top bar.
-const SAFE_AREA_TOP := 20.0
+## Labels never intrude under the top bar (a 22px plate plus a pixel of air).
+const SAFE_AREA_TOP := 24.0
 
 const MARKER_SPRITES := {
     "regional": "world/marker_regional.png",
@@ -280,9 +280,11 @@ func _draw() -> void:
 # ---------------------------------------------------------------------------
 
 ## Scale for the banked map frames over the terrain strip; the level aircraft
-## uses its 48px ground sprite at native scale, matching the strip's own pixel
-## density.
+## uses its 48px ground sprite at FOLLOW_LEVEL_SCALE. The plane is the star of
+## follow mode — at native scale it read lost over the 640x360 strip — so it
+## draws coarser than the terrain beneath it, deliberately.
 const FOLLOW_BANK_SCALE := 3
+const FOLLOW_LEVEL_SCALE := 2
 
 ## The followed aircraft, centred over the FollowTerrain strip below this
 ## layer: banked livery frames, a spinning prop, a one-pixel bob, its
@@ -316,9 +318,9 @@ func _draw_terrain_followed() -> void:
             frame_px = banked.get_size().y * float(FOLLOW_BANK_SCALE)
     else:
         var ground: Texture2D = LiverySprites.ground_strip(plane)
-        AircraftSprites.draw_frame(self, ground, at, heading, 1)
+        AircraftSprites.draw_frame(self, ground, at, heading, FOLLOW_LEVEL_SCALE)
         if ground != null:
-            frame_px = ground.get_size().y
+            frame_px = ground.get_size().y * float(FOLLOW_LEVEL_SCALE)
     _draw_follow_prop(frame_px, at, heading)
     if leg.aircraft_id == selected_aircraft_id:
         _callsign_chip(_font, plane, leg, at, now, 3)
@@ -339,21 +341,23 @@ func _draw_follow_prop(frame_px: float, at: Vector2, heading: float) -> void:
     draw_rect(Rect2((nose - side * swing).round(), Vector2.ONE * 2.0), colour)
     draw_rect(Rect2((nose - Vector2.ONE).round(), Vector2.ONE * 2.0), _colour("white"))
 
-## Destination and time remaining in one small dark chip at the bottom of the
-## screen — the only UI the strip itself asks for.
+## Destination and time remaining on a small luggage tag at the bottom of the
+## screen — the only UI the strip itself asks for, in the same warm tag
+## language as the map's callsign chip: yellow card, lit lip, punched hole.
 func _eta_chip(leg: FlightLeg, now: float) -> void:
     var destination: Dictionary = db.airports.get(leg.destination_id, {})
     var text: String = "→ %s · %s" % [String(destination.get("code", "")),
         UiTheme.duration(leg.seconds_remaining(now))]
     var width: float = _font.get_string_size(
         text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
-    var box := Vector2(width + 12.0, 13.0)
+    var box := Vector2(width + 17.0, 15.0)
     var origin: Vector2 = _snap(Vector2((size.x - box.x) * 0.5, size.y - box.y - 6.0))
     draw_rect(Rect2(origin - Vector2.ONE, box + Vector2(2.0, 2.0)), _colour("outline"))
-    draw_rect(Rect2(origin, box), _colour("navy_deep"))
-    draw_rect(Rect2(origin, Vector2(box.x, 1.0)), _colour("navy"))
-    draw_string(_font, origin + Vector2(6.0, 10.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        LABEL_FONT_SIZE, _colour("white"))
+    draw_rect(Rect2(origin, box), _colour("accent_yellow"))
+    draw_rect(Rect2(origin, Vector2(box.x, 1.0)), _colour("card_hi"))
+    draw_rect(Rect2(origin + Vector2(3.0, 4.0), Vector2(2.0, 2.0)), _colour("outline"))
+    draw_string(_font, origin + Vector2(9.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+        LABEL_FONT_SIZE, _colour("navy_deep"))
 
 # ---------------------------------------------------------------------------
 # Clouds
@@ -472,8 +476,10 @@ func _draw_marker(entry: Dictionary) -> void:
         # Ring pulses between two palette colours rather than fading alpha,
         # which would produce off-palette pixels.
         var on: bool = fmod(_pulse, 1.0) < 0.6
-        _blit("selected", pos, _colour("white") if on else _colour("accent_orange"))
-        used = Vector2(13, 13)
+        var ring: Vector2 = _blit(
+            "selected", pos, _colour("white") if on else _colour("accent_orange"))
+        if ring != Vector2.ZERO:
+            used = ring
 
     var claim: Vector2 = used if used != Vector2.ZERO else Vector2(7, 7)
     _obstacles.append(Rect2(pos - claim * 0.5 - Vector2.ONE, claim + Vector2(2, 2)))

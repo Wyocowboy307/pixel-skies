@@ -2,8 +2,8 @@ class_name Hud
 extends Control
 ## Permanent top bar plus the contextual selected-airport card.
 ##
-## At 640x360 the HUD has to be terse: a 15 px bar and a card barely wider than
-## its text. The airfield stays visible between them (docs/UI_UX.md).
+## At 640x360 the HUD has to be terse: a 22 px plate and a card barely wider
+## than its text. The airfield stays visible between them (docs/UI_UX.md).
 
 signal focus_requested(airport_id: String)
 signal home_requested()
@@ -37,12 +37,17 @@ func bind_sim(simulation: Simulation) -> void:
 
 func _build_top_bar() -> void:
     var bar := PanelContainer.new()
-    bar.theme_type_variation = "HudBar"
+    bar.theme_type_variation = "HudTop"
     bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-    bar.offset_bottom = UiTheme.TOP_BAR_HEIGHT + 3.0
-    bar.offset_left = -4.0
-    bar.offset_right = 4.0
-    bar.offset_top = -4.0
+    # The chunky frame is part of the look now: only the black outline row
+    # hangs off the top of the screen, so the lit lip shows along the top and
+    # the shaded navy base edge along the bottom. Sides bleed off so the plate
+    # runs edge to edge. Height comes from these offsets, not TOP_BAR_HEIGHT:
+    # a 22px visible plate fits the inset money/fleet plates exactly.
+    bar.offset_bottom = UiTheme.TOP_BAR_HEIGHT + 7.0
+    bar.offset_left = -2.0
+    bar.offset_right = 2.0
+    bar.offset_top = -1.0
     bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(bar)
 
@@ -51,13 +56,11 @@ func _build_top_bar() -> void:
     row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     bar.add_child(row)
 
-    row.add_child(UiTheme.icon("money"))
     _money_label = UiTheme.label("", "white")
-    row.add_child(_money_label)
+    row.add_child(_plate("money", _money_label))
 
-    row.add_child(UiTheme.icon("plane"))
     _fleet_label = UiTheme.label("", "card_hi")
-    row.add_child(_fleet_label)
+    row.add_child(_plate("plane", _fleet_label))
 
     var spacer := Control.new()
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -67,18 +70,37 @@ func _build_top_bar() -> void:
     _zoom_label = UiTheme.label("", "card_hi")
     row.add_child(_zoom_label)
 
-## A small chip that says the camera is locked to an aircraft, and how to stop.
+## Money and fleet each sit on a small inset plate with their icon, so the
+## readouts look like gauges built into the bar rather than floating text.
+func _plate(icon_name: String, value: Label) -> PanelContainer:
+    var plate := PanelContainer.new()
+    plate.theme_type_variation = "HudPlate"
+    plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var box := HBoxContainer.new()
+    box.add_theme_constant_override("separation", 3)
+    box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    plate.add_child(box)
+    var icon := UiTheme.icon(icon_name)
+    icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    box.add_child(icon)
+    value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    box.add_child(value)
+    return plate
+
+## A luggage-tag chip that says the camera is locked to an aircraft, and how
+## to stop — the same warm tag language as the map's callsign chip.
 func set_following(text: String) -> void:
     if _follow_chip == null:
         _follow_chip = PanelContainer.new()
-        _follow_chip.theme_type_variation = "HudBar"
+        _follow_chip.theme_type_variation = "TagChip"
         _follow_chip.set_anchors_preset(Control.PRESET_CENTER_TOP)
-        _follow_chip.offset_top = 20.0
+        _follow_chip.offset_top = 26.0
         _follow_chip.offset_left = -80.0
         _follow_chip.offset_right = 80.0
         _follow_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
         add_child(_follow_chip)
-        _follow_label = UiTheme.label("", "white")
+        _follow_label = UiTheme.label("", "navy")
         _follow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         _follow_chip.add_child(_follow_label)
     _follow_chip.visible = not text.is_empty()

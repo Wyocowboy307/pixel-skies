@@ -28,6 +28,10 @@ func _pngs(root: String) -> PackedStringArray:
     if dir == null:
         return out
     for file: String in dir.get_files():
+        # The font atlas is deliberately skip-imported (the FontFile embeds its
+        # glyphs at import time), so load() on it can only print an error.
+        if file == "font5x7.png":
+            continue
         if file.ends_with(".png"):
             out.append(root.path_join(file))
     for sub: String in dir.get_directories():
