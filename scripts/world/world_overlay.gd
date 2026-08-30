@@ -323,7 +323,9 @@ func _draw_terrain_followed() -> void:
             frame_px = ground.get_size().y * float(FOLLOW_LEVEL_SCALE)
     _draw_follow_prop(frame_px, at, heading)
     if leg.aircraft_id == selected_aircraft_id:
-        _callsign_chip(_font, plane, leg, at, now, 3)
+        # gap = 10 * scale must clear half the 2x ground frame (48px for the
+        # trailhopper), or the tag hangs over the plane's own tail.
+        _callsign_chip(_font, plane, leg, at, now, 6)
     _eta_chip(leg, now)
 
 ## The same bright two-tip prop flick airport_view gives taxiing aircraft,

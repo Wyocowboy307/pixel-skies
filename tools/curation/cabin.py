@@ -4,7 +4,39 @@ Side-view cross-section vocabulary: a passenger seat, an oval porthole, the
 EXIT door, a galley cart, carpet floor, and the luggage plus cargo net that
 fill the hold. All from the curated flight sheets; coordinates were verified
 against alpha component bounds so no crop catches a neighbouring sprite.
+
+The seat is recoloured on extraction: the locked visual language calls for
+warm orange upholstery (the airline's accent colour), but the flight pack has
+none — its only saturated orange is the life-vest ramp. The transform below
+hue-shifts the seat's brown upholstery onto that orange while leaving the
+grey frame, rails and headrest cover alone, so the shipped seat stays a
+reproducible library derivation rather than a hand-painted file.
 """
+
+import colorsys
+
+
+def _orange_upholstery(piece):
+    piece = piece.copy()
+    pixels = piece.load()
+    for py in range(piece.height):
+        for px in range(piece.width):
+            r, g, b, a = pixels[px, py]
+            if a == 0:
+                continue
+            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            # Upholstery = warm brown hues with real saturation; the frame and
+            # rails are near-grey and fall below the saturation gate.
+            if 0.01 <= h <= 0.16 and s >= 0.10 and v >= 0.18:
+                s2 = min(1.0, s * 1.9 + 0.18)
+                r2, g2, b2 = colorsys.hsv_to_rgb(0.078, s2, min(1.0, v * 1.12))
+                pixels[px, py] = (int(r2 * 255), int(g2 * 255), int(b2 * 255), a)
+    return piece
+
+
+TRANSFORMS = {
+    "cabin/seat_tan.png": _orange_upholstery,
+}
 
 MANIFEST = {
     "02_AIRCRAFT_AND_CABIN/flight/2.png": [

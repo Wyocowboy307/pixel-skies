@@ -249,10 +249,24 @@ func _draw() -> void:
         return
     if _scene != null:
         # The composed scene is the airfield: one texture, no procedural
-        # geometry. Only living things draw on top of it.
+        # geometry. Only living things draw on top of it — plus anything the
+        # airline has BUILT, because an upgrade that does not appear on the
+        # field is not a visible change (CLAUDE.md non-negotiable).
         var extent: Vector2 = _extent()
-        _tiled(_grass_tile(), Rect2(-extent - Vector2(256, 256), extent * 2.0 + Vector2(512, 512)))
+        # The border beyond the composed texture must be the SAME grass the
+        # scene itself is built from, or the camera clamp reveals a hard step
+        # into the brighter placeholder biome tile at every scene edge.
+        var border: Texture2D = _sprite("airfield/grass.png")
+        if border != null:
+            # Margin is a whole number of tiles so the border's tiling phase
+            # continues the scene's own base-grass grid without a seam.
+            var margin := Vector2(288, 384)
+            draw_texture_rect(border,
+                Rect2(-extent - margin, extent * 2.0 + margin * 2.0), true)
+        else:
+            _tiled(_grass_tile(), Rect2(-extent - Vector2(256, 256), extent * 2.0 + Vector2(512, 512)))
         draw_texture(_scene, -extent)
+        _draw_built_upgrades()
         _draw_parked_aircraft()
         _draw_movements()
         _draw_apron_life()
@@ -439,8 +453,12 @@ func _draw_buildings() -> void:
         var building: Dictionary = entry
         _blit_building(String(building.get("sprite", "terminal_1")),
             _vec(building.get("position", [0, 0])))
-    # Upgrade slots only appear once the airline has actually built them, which
-    # is what makes an upgrade a visible change (docs/AIRPORT_SYSTEM.md).
+    _draw_built_upgrades()
+
+## Upgrade slots only appear once the airline has actually built them, which
+## is what makes an upgrade a visible change (docs/AIRPORT_SYSTEM.md). Drawn
+## in both the procedural and composed-scene paths.
+func _draw_built_upgrades() -> void:
     if sim == null:
         return
     for entry: Variant in layout.get("upgrade_slots", []):
@@ -807,7 +825,7 @@ func _draw_snow() -> void:
     var view: Rect2 = _visible_rect()
     var white: Color = PixelPalette.get_colour("white")
     var pale: Color = _wx_colour("ice_light", "white")
-    var count: int = 52 + int(roundf(_weather_intensity * 22.0))
+    var count: int = 84 + int(roundf(_weather_intensity * 30.0))
     for i in range(count):
         var seed_x: float = float(absi(hash("snow_x_%d" % i)) % 1000) / 1000.0
         var seed_y: float = float(absi(hash("snow_y_%d" % i)) % 1000) / 1000.0
@@ -828,9 +846,12 @@ func _build_dusting() -> void:
     rng.seed = hash("%s_dusting" % airport_id)
     var extent: Vector2 = _extent()
     var paved: Array[Rect2] = _paved_rects()
+    # Scale the dusting with the field, or the big composed scenes read as a
+    # few lost pixels: ~one patch seed per 4000px2, within sane bounds.
+    var target: int = clampi(int(extent.x * extent.y * 4.0 / 4000.0), 230, 720)
     var placed := 0
     var attempts := 0
-    while placed < 230 and attempts < 900:
+    while placed < target and attempts < target * 4:
         attempts += 1
         var at: Vector2 = Vector2(roundf(rng.randf_range(-extent.x, extent.x)),
             roundf(rng.randf_range(-extent.y, extent.y)))
@@ -843,10 +864,12 @@ func _build_dusting() -> void:
             continue
         _dusting.append(at)
         placed += 1
-        # About a third of the speckles get a neighbour, so the snow settles in
-        # small patches rather than a field of lone pixels.
-        if rng.randf() < 0.35:
+        # Over half the speckles get one or two neighbours, so the snow settles
+        # in small patches rather than a field of lone pixels.
+        if rng.randf() < 0.55:
             _dusting.append(at + Vector2(float(rng.randi_range(-2, 2)), float(rng.randi_range(1, 2))))
+            if rng.randf() < 0.4:
+                _dusting.append(at + Vector2(float(rng.randi_range(-1, 3)), float(rng.randi_range(-1, 2))))
     for runway: Dictionary in _all_runways():
         var rect: Rect2 = _runway_rect(runway)
         for _i in range(40):

@@ -26,29 +26,41 @@ sys.path.insert(0, str(ROOT / "tools"))
 LIB = ROOT / "assets" / "library" / "PixelSkies_Curated_Assets"
 OUT = ROOT / "assets" / "art" / "production"
 
-def _load_manifests() -> dict:
-    """Merge every tools/curation/*.py domain manifest."""
+def _load_manifests() -> tuple:
+    """Merge every tools/curation/*.py domain manifest (and its transforms)."""
     import importlib
     merged: dict[str, list] = {}
+    transforms: dict[str, object] = {}
     for module_file in sorted((ROOT / "tools" / "curation").glob("*.py")):
         if module_file.stem.startswith("_"):
             continue
         module = importlib.import_module(f"curation.{module_file.stem}")
         for sheet, crops in getattr(module, "MANIFEST", {}).items():
             merged.setdefault(sheet, []).extend(crops)
-    return merged
+        # A module may declare TRANSFORMS: {dest: callable} for slices that need
+        # a deliberate, re-runnable retouch (e.g. an upholstery recolour). The
+        # transform is part of the manifest, so the shipped asset stays
+        # reproducible from the library alone.
+        transforms.update(getattr(module, "TRANSFORMS", {}))
+    return merged, transforms
 
 
 MANIFEST: dict[str, list[tuple[int, int, int, int, str]]] = {}
+TRANSFORMS: dict[str, object] = {}
 
 
 def extract() -> int:
-    MANIFEST.update(_load_manifests())
+    manifests, transforms = _load_manifests()
+    MANIFEST.update(manifests)
+    TRANSFORMS.update(transforms)
     count = 0
     for sheet_rel, crops in MANIFEST.items():
         sheet = Image.open(LIB / sheet_rel).convert("RGBA")
         for x, y, w, h, dest in crops:
             piece = sheet.crop((x, y, x + w, y + h))
+            transform = TRANSFORMS.get(dest)
+            if transform is not None:
+                piece = transform(piece)
             target = OUT / dest
             target.parent.mkdir(parents=True, exist_ok=True)
             piece.save(target)

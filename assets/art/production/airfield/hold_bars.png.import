@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dybuq0nfliach"
-path="res://.godot/imported/apron_bays.png-40439be2b4d1fe66206eefbe28a0fd5d.ctex"
+uid="uid://cmn4516s5eiwy"
+path="res://.godot/imported/hold_bars.png-f6eb770b60073ac60074f6426ff345c6.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/production/airfield/apron_bays.png"
-dest_files=["res://.godot/imported/apron_bays.png-40439be2b4d1fe66206eefbe28a0fd5d.ctex"]
+source_file="res://assets/art/production/airfield/hold_bars.png"
+dest_files=["res://.godot/imported/hold_bars.png-f6eb770b60073ac60074f6426ff345c6.ctex"]
 
 [params]
 

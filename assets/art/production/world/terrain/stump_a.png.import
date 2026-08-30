@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dtjn6t5oq41f2"
-path="res://.godot/imported/stairs_side.png-38d938b6aa6b971faf5ae9f30a9b67bb.ctex"
+uid="uid://u3e065jocpxm"
+path="res://.godot/imported/stump_a.png-4a51877261948c5210f19150a160a92e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/production/airfield/stairs_side.png"
-dest_files=["res://.godot/imported/stairs_side.png-38d938b6aa6b971faf5ae9f30a9b67bb.ctex"]
+source_file="res://assets/art/production/world/terrain/stump_a.png"
+dest_files=["res://.godot/imported/stump_a.png-4a51877261948c5210f19150a160a92e.ctex"]
 
 [params]
 

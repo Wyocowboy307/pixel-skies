@@ -44,9 +44,12 @@ MANIFEST = {
         (1392, 144, 48, 48, "world/terrain/road_fill.png"),
         # Snow-capped mountain massif and a lone outcrop, on matching grass.
         (8, 1540, 496, 252, "world/terrain/mountains_big.png"),
-        # (Every larger foothill composition on this sheet is truncated by
-        # its region boundary, so the strip builds its foothills from the
-        # transparent pine and rock props instead.)
+        # The massif's right-hand cluster alone (two snow peaks, one front
+        # peak, small outcrop) with a grass margin on every side: a smaller
+        # echo of the range for the BZN end of the corridor.  (The catalog's
+        # suggested "second variant" at ~520,1540 is actually a brown cliff
+        # bowl, verified visually, so the sub-cluster is used instead.)
+        (264, 1540, 240, 248, "world/terrain/mountains_small.png"),
     ],
     _TOWN: [
         (0, 0, 48, 48, "world/terrain/house_a.png"),
@@ -78,5 +81,30 @@ MANIFEST = {
         (288, 672, 96, 96, "world/terrain/plot_c.png"),
         (384, 672, 96, 96, "world/terrain/plot_d.png"),
         (192, 576, 96, 48, "world/terrain/fence.png"),
+        # Flowering bushes and loose flower clumps: garden/undergrowth accents.
+        (96, 240, 48, 48, "world/terrain/flower_bush_pink.png"),
+        (144, 240, 48, 48, "world/terrain/flower_bush_yellow.png"),
+        (96, 192, 48, 48, "world/terrain/flowers_a.png"),
+        (144, 192, 48, 48, "world/terrain/flowers_b.png"),
+        # Boulders, a stump and a pebble cluster: ground accents for the
+        # foothill belts and riverbanks.
+        (192, 240, 48, 48, "world/terrain/boulder_a.png"),
+        (240, 240, 48, 48, "world/terrain/boulder_b.png"),
+        (288, 240, 48, 48, "world/terrain/boulder_c.png"),
+        (336, 240, 48, 48, "world/terrain/stump_a.png"),
+        (288, 192, 48, 48, "world/terrain/pebbles_a.png"),
+        # A cattail clump and lily pads from the river demo block.  These sit
+        # on this sheet's flat river blue (lighter than the corridor's lake
+        # water), so compose_corridor.py chroma-keys the water out and
+        # composites just the plants onto the corridor river.  (The second
+        # cattail clump at 192,330 has a baked bank strip behind its heads
+        # that keying cannot remove, so only this clean clump is cut.)
+        (144, 328, 44, 50, "world/terrain/cattails_a.png"),
+        (144, 384, 48, 48, "world/terrain/lily_a.png"),
+        (144, 432, 48, 48, "world/terrain/lily_b.png"),
+        # One clean self-contained foothill from the hill-slope autotile run
+        # (grass west slope, dirt face, rocky east face): seats the mountain
+        # massifs.  The rest of the 192,480,384,96 run is edge-cut autotile.
+        (384, 480, 192, 96, "world/terrain/foothill_big.png"),
     ],
 }

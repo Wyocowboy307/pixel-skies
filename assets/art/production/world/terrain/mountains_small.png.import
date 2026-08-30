@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cae20bcg7xobu"
-path="res://.godot/imported/fuel_truck_side.png-5950fe1306e43074a44e01b3ee28149a.ctex"
+uid="uid://crjx0qltw8bfc"
+path="res://.godot/imported/mountains_small.png-cdac770f1873ab676304aa4c75a6d051.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/production/airfield/fuel_truck_side.png"
-dest_files=["res://.godot/imported/fuel_truck_side.png-5950fe1306e43074a44e01b3ee28149a.ctex"]
+source_file="res://assets/art/production/world/terrain/mountains_small.png"
+dest_files=["res://.godot/imported/mountains_small.png-cdac770f1873ab676304aa4c75a6d051.ctex"]
 
 [params]
 
